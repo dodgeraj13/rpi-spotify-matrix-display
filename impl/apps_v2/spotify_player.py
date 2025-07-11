@@ -41,6 +41,10 @@ class SpotifyScreen:
         self.thread = threading.Thread(target=self.getCurrentPlaybackAsync)
         self.thread.start()
 
+        self.previous_art_img = None
+        self.slide_animation_progress = -1  # -1 means no animation
+        self.slide_total_frames = 12  # how many frames the animation lasts
+
     def getCurrentPlaybackAsync(self):
         # delay spotify fetches
         time.sleep(3)
@@ -60,6 +64,9 @@ class SpotifyScreen:
 
             if self.full_screen_always:
                 if self.current_art_url != art_url:
+                    self.previous_art_img = self.current_art_img
+                    self.slide_animation_progress = 0
+
                     self.current_art_url = art_url
                     response = requests.get(self.current_art_url)
                     img = Image.open(BytesIO(response.content))
@@ -68,7 +75,18 @@ class SpotifyScreen:
                 frame = Image.new("RGB", (self.canvas_width, self.canvas_height), (0,0,0))
                 draw = ImageDraw.Draw(frame)
 
-                frame.paste(self.current_art_img, (0,0))
+                if self.slide_animation_progress >= 0 and self.previous_art_img:
+                    offset = int((self.slide_animation_progress / self.slide_total_frames) * self.canvas_width)
+                    frame.paste(self.previous_art_img, (-offset, 0))
+                    frame.paste(self.current_art_img, (self.canvas_width - offset, 0))
+
+                    self.slide_animation_progress += 1
+                    if self.slide_animation_progress >= self.slide_total_frames:
+                        self.slide_animation_progress = -1
+                        self.previous_art_img = None
+                else:
+                    frame.paste(self.current_art_img, (0, 0))
+
                 return (frame, self.is_playing)
             else:
                 if not self.is_playing:
@@ -100,11 +118,17 @@ class SpotifyScreen:
                     response = requests.get(self.current_art_url)
                     img = Image.open(BytesIO(response.content))
                     self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
-                elif not show_fullscreen and (self.current_art_url != art_url or self.current_art_img.size == (self.canvas_width, self.canvas_height)):
-                    self.current_art_url = art_url
-                    response = requests.get(self.current_art_url)
-                    img = Image.open(BytesIO(response.content))
-                    self.current_art_img = img.resize((48, 48), resample=Image.LANCZOS)
+                elif not show_fullscreen:
+                    if self.current_art_url != art_url:
+                        self.previous_art_img = self.current_art_img
+                        self.slide_animation_progress = 0
+
+                        self.current_art_url = art_url
+                        response = requests.get(self.current_art_url)
+                        img = Image.open(BytesIO(response.content))
+                        self.current_art_img = img.resize((48, 48), resample=Image.LANCZOS)
+                    elif self.current_art_img.size == (self.canvas_width, self.canvas_height):
+                        self.current_art_img = self.current_art_img.resize((48, 48), resample=Image.LANCZOS)
 
                 frame = Image.new("RGB", (self.canvas_width, self.canvas_height), (0,0,0))
                 draw = ImageDraw.Draw(frame)
@@ -115,7 +139,20 @@ class SpotifyScreen:
                         frame.paste(self.current_art_img, (0,0))
                         return (frame, self.is_playing)
                     else:
-                        frame.paste(self.current_art_img, (8,14))
+                        if self.slide_animation_progress >= 0 and self.previous_art_img:
+                            offset = int((self.slide_animation_progress / self.slide_total_frames) * 56)  # 48 + margin
+                            prev_x = 8 - offset
+                            curr_x = 8 + (56 - offset)
+
+                            frame.paste(self.previous_art_img, (prev_x, 14))
+                            frame.paste(self.current_art_img, (curr_x, 14))
+
+                            self.slide_animation_progress += 1
+                            if self.slide_animation_progress >= self.slide_total_frames:
+                                self.slide_animation_progress = -1
+                                self.previous_art_img = None
+                        else:
+                            frame.paste(self.current_art_img, (8,14))
 
                 freeze_title = self.title_animation_cnt == 0 and self.artist_animation_cnt > 0
                 freeze_artist = self.artist_animation_cnt == 0 and self.title_animation_cnt > 0
@@ -155,7 +192,7 @@ class SpotifyScreen:
                 draw.rectangle((0,line_y-1,0+round(((progress_ms / duration_ms) * 100) // 1.57), line_y), fill=self.play_color)
                 drawPlayPause(draw, self.is_playing, self.play_color)
 
-                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
+                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics'] and self.slide_animation_progress < 0:
                     lyric_lines = lyrics['lyrics']['lines']
                     current_time_ms = int(progress_ms)
 
@@ -190,8 +227,8 @@ class SpotifyScreen:
                         total_height = len(lines) * line_height
                         y_start = 14 + (48 - total_height) // 2
 
-                        overlay = Image.new("RGBA", (48, 48), (0, 0, 0, 120))  # semi-transparent black
-                        frame.paste(overlay, (8, 14), overlay)
+                        overlay = Image.new("RGBA", (64, 48), (0, 0, 0, 120))  # semi-transparent black
+                        frame.paste(overlay, (0, 14), overlay)
 
                         for i, line in enumerate(lines):
                             text_width = self.font.getlength(line)
