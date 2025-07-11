@@ -56,7 +56,7 @@ class SpotifyScreen:
 
     def generateFrame(self, response):
         if response is not None:
-            (artist, title, art_url, self.is_playing, progress_ms, duration_ms) = response
+            (artist, title, art_url, self.is_playing, progress_ms, duration_ms, lyrics) = response
 
             if self.full_screen_always:
                 if self.current_art_url != art_url:
@@ -154,6 +154,50 @@ class SpotifyScreen:
                 draw.rectangle((0,line_y-1,63,line_y), fill=(100,100,100))
                 draw.rectangle((0,line_y-1,0+round(((progress_ms / duration_ms) * 100) // 1.57), line_y), fill=self.play_color)
                 drawPlayPause(draw, self.is_playing, self.play_color)
+
+                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
+                    lyric_lines = lyrics['lyrics']['lines']
+                    current_time_ms = int(progress_ms)
+
+                    # Find the latest lyric line up to current time
+                    current_line = None
+                    for line in lyric_lines:
+                        if int(line['startTimeMs']) <= current_time_ms:
+                            text = line['words'].strip()
+                            if text:
+                                current_line = text
+                        else:
+                            break
+
+                    if current_line:
+                        text_length = self.canvas_width - 12  # max width for wrapped text
+                        words = current_line.split()
+                        lines = []
+                        current = ""
+
+                        for word in words:
+                            test = f"{current} {word}".strip()
+                            if self.font.getlength(test) <= text_length:
+                                current = test
+                            else:
+                                lines.append(current)
+                                current = word
+                        if current:
+                            lines.append(current)
+
+                        # Center vertically in 48x48 box starting at y=14
+                        line_height = 6  # adjust if needed based on your font
+                        total_height = len(lines) * line_height
+                        y_start = 14 + (48 - total_height) // 2
+
+                        overlay = Image.new("RGBA", (48, 48), (0, 0, 0, 120))  # semi-transparent black
+                        frame.paste(overlay, (8, 14), overlay)
+
+                        for i, line in enumerate(lines):
+                            text_width = self.font.getlength(line)
+                            x = (self.canvas_width - text_width) // 2
+                            y = y_start + i * line_height
+                            draw.text((x, y), line, fill=self.title_color, font=self.font)
                 
                 return (frame, self.is_playing)
         else:

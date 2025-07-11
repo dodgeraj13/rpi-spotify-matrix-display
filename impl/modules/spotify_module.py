@@ -1,5 +1,6 @@
 import os, math, time, spotipy
 from queue import LifoQueue
+from syrics.api import Spotify
 
 class SpotifyModule:
     def __init__(self, config):
@@ -7,13 +8,17 @@ class SpotifyModule:
         self.calls = 0
         self.queue = LifoQueue()
         self.config = config
+        self.last_track_id = None
+        self.last_lyrics = None
         
         if config is not None and 'Spotify' in config and 'client_id' in config['Spotify'] \
-            and 'client_secret' in config['Spotify'] and 'redirect_uri' in config['Spotify']:
+            and 'client_secret' in config['Spotify'] and 'redirect_uri' in config['Spotify'] and 'sp_dc' in config['Spotify']:
             
             client_id = config['Spotify']['client_id']
             client_secret = config['Spotify']['client_secret']
             redirect_uri = config['Spotify']['redirect_uri']
+            sp_dc = self.config['Spotify']['sp_dc']
+
             if client_id != "" and client_secret != "" and redirect_uri != "":
                 try:
                     os.environ["SPOTIPY_CLIENT_ID"] = client_id
@@ -24,6 +29,7 @@ class SpotifyModule:
                     self.auth_manager = spotipy.SpotifyOAuth(scope=scope, open_browser=False)
                     print(self.auth_manager.get_authorize_url())
                     self.sp = spotipy.Spotify(auth_manager=self.auth_manager, requests_timeout=10)
+                    self.spl = Spotify(sp_dc)
                     self.isPlaying = False
                 except Exception as e:
                     print(e)
@@ -65,14 +71,22 @@ class SpotifyModule:
                     artist = None
                     title = None
                     art_url = None
+                    lyrics = None
                 else:
                     artist = track['item']['artists'][0]['name']
                     if len(track['item']['artists']) >= 2:
                         artist = artist + ", " + track['item']['artists'][1]['name']
                     title = track['item']['name']
                     art_url = track['item']['album']['images'][0]['url']
-                self.isPlaying = track['is_playing']
 
-                self.queue.put((artist, title, art_url, self.isPlaying, track["progress_ms"], track["item"]["duration_ms"]))
+                    track_id = track['item']['id']
+                    if not hasattr(self, 'last_track_id') or self.last_track_id != track_id:
+                        self.last_track_id = track_id
+                        self.last_lyrics = self.spl.get_lyrics(track_id)
+                        print(self.last_lyrics)
+                    lyrics = self.last_lyrics
+
+                self.isPlaying = track['is_playing']
+                self.queue.put((artist, title, art_url, self.isPlaying, track["progress_ms"], track["item"]["duration_ms"], lyrics))
         except Exception as e:
             print(e)
