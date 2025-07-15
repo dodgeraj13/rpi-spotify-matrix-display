@@ -192,7 +192,7 @@ class SpotifyScreen:
                 draw.rectangle((0,line_y-1,0+round(((progress_ms / duration_ms) * 100) // 1.57), line_y), fill=self.play_color)
                 drawPlayPause(draw, self.is_playing, self.play_color)
 
-                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics'] and self.slide_animation_progress == -1 and self.paused == False:
+                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics'] and self.slide_animation_progress <= 0 and self.paused == False:
                     lyric_lines = lyrics['lyrics']['lines']
                     current_time_ms = int(progress_ms)
 

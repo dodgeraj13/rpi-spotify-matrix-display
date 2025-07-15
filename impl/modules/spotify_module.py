@@ -93,7 +93,7 @@ class SpotifyModule:
                     if self.spl is not None and (not hasattr(self, 'last_track_id') or self.last_track_id != track_id):
                         self.last_track_id = track_id
                         self.last_lyrics = self.spl.get_lyrics(track_id)
-                        print(self.last_lyrics)
+                        # print(self.last_lyrics)
                     lyrics = self.last_lyrics
 
                 self.isPlaying = track['is_playing']
