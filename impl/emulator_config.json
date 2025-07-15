@@ -2,6 +2,7 @@
     "pixel_size": 8,
     "pixel_style": "square",
     "pixel_outline": 0,
+    "pixel_glow": 6,
     "display_adapter": "pygame",
     "suppress_font_warnings": false,
     "suppress_adapter_load_errors": true,

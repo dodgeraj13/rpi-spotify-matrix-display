@@ -3,4 +3,4 @@ numpy
 requests
 spotipy
 RGBMatrixEmulator
-syrics
+https://github.com/kylejohnsonkj/syrics/archive/main.zip
