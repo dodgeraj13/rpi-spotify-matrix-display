@@ -8,17 +8,18 @@ class SpotifyModule:
         self.calls = 0
         self.queue = LifoQueue()
         self.config = config
+
+        self.spl = None
         self.last_track_id = None
         self.last_lyrics = None
         
         if config is not None and 'Spotify' in config and 'client_id' in config['Spotify'] \
-            and 'client_secret' in config['Spotify'] and 'redirect_uri' in config['Spotify'] and 'sp_dc' in config['Spotify']:
+            and 'client_secret' in config['Spotify'] and 'redirect_uri' in config['Spotify']:
             
             client_id = config['Spotify']['client_id']
             client_secret = config['Spotify']['client_secret']
             redirect_uri = config['Spotify']['redirect_uri']
-            sp_dc = self.config['Spotify']['sp_dc']
-
+            
             if client_id != "" and client_secret != "" and redirect_uri != "":
                 try:
                     os.environ["SPOTIPY_CLIENT_ID"] = client_id
@@ -29,7 +30,6 @@ class SpotifyModule:
                     self.auth_manager = spotipy.SpotifyOAuth(scope=scope, open_browser=False)
                     print(self.auth_manager.get_authorize_url())
                     self.sp = spotipy.Spotify(auth_manager=self.auth_manager, requests_timeout=10)
-                    self.spl = Spotify(sp_dc)
                     self.isPlaying = False
                 except Exception as e:
                     print(e)
@@ -40,6 +40,15 @@ class SpotifyModule:
         else:
             print("[Spotify Module] Missing config parameters")
             self.invalid = True
+
+        # isolate lyrics
+        if config is not None and 'Spotify' in config and 'sp_dc' in config['Spotify']:
+            sp_dc = self.config['Spotify']['sp_dc']
+
+            try:
+                self.spl = Spotify(sp_dc)
+            except Exception as e:
+                print(e)
     
     def isDeviceWhitelisted(self):
         if self.config is not None and 'Spotify' in self.config and 'device_whitelist' in self.config['Spotify']:
@@ -79,8 +88,9 @@ class SpotifyModule:
                     title = track['item']['name']
                     art_url = track['item']['album']['images'][0]['url']
 
+                    # lyrics
                     track_id = track['item']['id']
-                    if not hasattr(self, 'last_track_id') or self.last_track_id != track_id:
+                    if self.spl is not None and (not hasattr(self, 'last_track_id') or self.last_track_id != track_id):
                         self.last_track_id = track_id
                         self.last_lyrics = self.spl.get_lyrics(track_id)
                         print(self.last_lyrics)
