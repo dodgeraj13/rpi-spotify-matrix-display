@@ -212,6 +212,7 @@ class SpotifyScreen:
                         lines = []
                         current = ""
 
+                        max_lines = 7
                         for word in words:
                             test = f"{current} {word}".strip()
                             if self.font.getlength(test) <= text_length:
@@ -219,8 +220,17 @@ class SpotifyScreen:
                             else:
                                 lines.append(current)
                                 current = word
-                        if current:
+                                if len(lines) == max_lines - 1:
+                                    break
+
+                        if len(lines) < max_lines - 1:
                             lines.append(current)
+                        else:
+                            # Truncate the last line with an ellipsis
+                            ellipsis = ".."
+                            while self.font.getlength(current + ellipsis) > text_length and current:
+                                current = current.rsplit(" ", 1)[0]
+                            lines.append((current + ellipsis).strip())
 
                         # Center vertically in 48x48 box starting at y=14
                         line_height = 6  # adjust if needed based on your font
