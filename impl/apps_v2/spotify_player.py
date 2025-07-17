@@ -49,6 +49,8 @@ class SpotifyScreen:
         self.pause_unscale_animation_progress = -1
         self.pause_scale_total_frames = 8
 
+        self.current_title_for_slide = ''
+
     def getCurrentPlaybackAsync(self):
         # delay spotify fetches
         time.sleep(3)
@@ -67,11 +69,13 @@ class SpotifyScreen:
             (artist, title, art_url, self.is_playing, progress_ms, duration_ms, lyrics, is_previous) = response
 
             if self.full_screen_always:
-                if self.current_art_url != art_url:
+                if self.current_art_url != art_url or self.current_title_for_slide != title:
                     self.previous_art_img = self.current_art_img
                     self.slide_animation_progress = 0
 
                     self.current_art_url = art_url
+                    self.current_title_for_slide = title
+                    
                     response = requests.get(self.current_art_url)
                     img = Image.open(BytesIO(response.content))
                     self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
@@ -132,11 +136,13 @@ class SpotifyScreen:
                     img = Image.open(BytesIO(response.content))
                     self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
                 elif not show_fullscreen:
-                    if self.current_art_url != art_url:
+                    if self.current_art_url != art_url or self.current_title_for_slide != title:
                         self.previous_art_img = self.current_art_img
                         self.slide_animation_progress = 0
 
                         self.current_art_url = art_url
+                        self.current_title_for_slide = title
+
                         response = requests.get(self.current_art_url)
                         img = Image.open(BytesIO(response.content))
                         self.current_art_img = img.resize((48, 48), resample=Image.LANCZOS)
