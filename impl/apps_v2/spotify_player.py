@@ -144,11 +144,22 @@ class SpotifyScreen:
                 if self.current_art_img is not None:
                     if show_fullscreen or self.pause_unscale_animation_progress >= 0:
                         if self.pause_scale_animation_progress >= 0:
-                            progress = self.pause_scale_animation_progress / self.pause_scale_total_frames
-                            size = int(48 + (64 - 48) * progress)
+                            half = self.pause_scale_total_frames // 2
+                            p = self.pause_scale_animation_progress
+
+                            if p < half:
+                                # Slide up before scaling
+                                slide_progress = p / half
+                                y = int(14 * (1 - slide_progress))
+                                size = 48
+                            else:
+                                # Scale up
+                                scale_progress = (p - half) / half
+                                size = int(48 + (64 - 48) * scale_progress)
+                                y = 0
+
                             resized = self.current_art_img.resize((size, size), resample=Image.LANCZOS)
                             x = (self.canvas_width - size) // 2
-                            y = int(14 * (1 - progress))
                             frame.paste(resized, (x, y))
 
                             self.pause_scale_animation_progress += 1
@@ -161,11 +172,22 @@ class SpotifyScreen:
                             return (frame, self.is_playing)
 
                         elif self.pause_unscale_animation_progress >= 0:
-                            progress = self.pause_unscale_animation_progress / self.pause_scale_total_frames
-                            size = int(64 - (64 - 48) * progress)
+                            half = self.pause_scale_total_frames // 2
+                            p = self.pause_unscale_animation_progress
+
+                            if p < half:
+                                # Scale down
+                                scale_progress = p / half
+                                size = int(64 - (64 - 48) * scale_progress)
+                                y = 0
+                            else:
+                                # Slide down
+                                slide_progress = (p - half) / half
+                                size = 48
+                                y = int(14 * slide_progress)
+
                             resized = self.current_art_img.resize((size, size), resample=Image.LANCZOS)
                             x = (self.canvas_width - size) // 2
-                            y = int(14 * progress)
                             frame.paste(resized, (x, y))
 
                             self.pause_unscale_animation_progress += 1
