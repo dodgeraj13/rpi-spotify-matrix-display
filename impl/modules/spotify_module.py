@@ -1,6 +1,7 @@
 import os, math, time, spotipy
 from queue import LifoQueue
 from syrics.api import Spotify
+from collections import deque
 
 class SpotifyModule:
     def __init__(self, config):
@@ -12,6 +13,10 @@ class SpotifyModule:
         self.spl = None
         self.last_track_id = None
         self.last_lyrics = None
+
+        self.playback_history = []  # actual ordered list of track_ids
+        self.playback_position = -1  # index of current position in history
+        self.last_is_previous = False
         
         if config is not None and 'Spotify' in config and 'client_id' in config['Spotify'] \
             and 'client_secret' in config['Spotify'] and 'redirect_uri' in config['Spotify']:
@@ -83,6 +88,7 @@ class SpotifyModule:
                     duration_ms = None
                     progress_ms = None
                     lyrics = None
+                    is_previous = False
                 else:
                     artist = track['item']['artists'][0]['name']
                     if len(track['item']['artists']) >= 2:
@@ -92,15 +98,42 @@ class SpotifyModule:
                     duration_ms = track["item"]["duration_ms"]
                     progress_ms = track["progress_ms"]
 
-                    # lyrics
                     track_id = track['item']['id']
-                    if self.spl is not None and (not hasattr(self, 'last_track_id') or self.last_track_id != track_id):
-                        self.last_track_id = track_id
-                        self.last_lyrics = self.spl.get_lyrics(track_id)
-                        # print(self.last_lyrics)
-                    lyrics = self.last_lyrics
 
+                    # Get lyrics only if track changed
+                    if self.spl is not None and (self.last_track_id != track_id):
+                        self.last_lyrics = self.spl.get_lyrics(track_id)
+
+                    lyrics = self.last_lyrics
                     self.isPlaying = track['is_playing']
-                    self.queue.put((artist, title, art_url, self.isPlaying, progress_ms, duration_ms, lyrics))
+
+                    if self.last_track_id != track_id:
+                        is_previous = False
+
+                        # Look backward
+                        if self.playback_position > 0 and self.playback_history[self.playback_position - 1] == track_id:
+                            self.playback_position -= 1
+                            is_previous = True
+
+                        # Look forward
+                        elif self.playback_position < len(self.playback_history) - 1 and self.playback_history[self.playback_position + 1] == track_id:
+                            self.playback_position += 1
+                            is_previous = False
+
+                        else:
+                            # New track: trim forward history if jumping to new song after going back
+                            self.playback_history = self.playback_history[:self.playback_position + 1]
+                            self.playback_history.append(track_id)
+                            self.playback_position += 1
+                            is_previous = False
+
+                        self.last_track_id = track_id
+                        self.last_is_previous = is_previous
+                    else:
+                        is_previous = self.last_is_previous
+
+                    print(is_previous)
+                    self.queue.put((artist, title, art_url, self.isPlaying, progress_ms, duration_ms, lyrics, is_previous))
+
         except Exception as e:
             print(e)

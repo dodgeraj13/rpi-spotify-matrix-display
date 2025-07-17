@@ -64,7 +64,7 @@ class SpotifyScreen:
 
     def generateFrame(self, response):
         if response is not None:
-            (artist, title, art_url, self.is_playing, progress_ms, duration_ms, lyrics) = response
+            (artist, title, art_url, self.is_playing, progress_ms, duration_ms, lyrics, is_previous) = response
 
             if self.full_screen_always:
                 if self.current_art_url != art_url:
@@ -81,8 +81,14 @@ class SpotifyScreen:
 
                 if self.slide_animation_progress >= 0 and self.previous_art_img:
                     offset = int((self.slide_animation_progress / self.slide_total_frames) * self.canvas_width)
-                    frame.paste(self.previous_art_img, (-offset, 0))
-                    frame.paste(self.current_art_img, (self.canvas_width - offset, 0))
+                    if is_previous:
+                        # Reverse slide: current enters from left
+                        frame.paste(self.previous_art_img, (offset, 0))
+                        frame.paste(self.current_art_img, (-self.canvas_width + offset, 0))
+                    else:
+                        # Normal slide: current enters from right
+                        frame.paste(self.previous_art_img, (-offset, 0))
+                        frame.paste(self.current_art_img, (self.canvas_width - offset, 0))
 
                     self.slide_animation_progress += 1
                     if self.slide_animation_progress >= self.slide_total_frames:
@@ -205,8 +211,14 @@ class SpotifyScreen:
                     else:
                         if self.slide_animation_progress >= 0 and self.previous_art_img:
                             offset = int((self.slide_animation_progress / self.slide_total_frames) * 56)  # 48 + margin
-                            prev_x = 8 - offset
-                            curr_x = 8 + (56 - offset)
+                            if is_previous:
+                                # Slide right-to-left (reverse)
+                                prev_x = 8 + offset
+                                curr_x = 8 - (56 - offset)
+                            else:
+                                # Slide left-to-right (default)
+                                prev_x = 8 - offset
+                                curr_x = 8 + (56 - offset)
 
                             frame.paste(self.previous_art_img, (prev_x, 14))
                             frame.paste(self.current_art_img, (curr_x, 14))
