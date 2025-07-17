@@ -46,6 +46,7 @@ class SpotifyScreen:
         self.slide_total_frames = 12  # how many frames the animation lasts
 
         self.pause_scale_animation_progress = -1
+        self.pause_unscale_animation_progress = -1
         self.pause_scale_total_frames = 8
 
     def getCurrentPlaybackAsync(self):
@@ -102,6 +103,8 @@ class SpotifyScreen:
                         self.artist_animation_cnt = 0
                         self.last_title_reset = math.floor(time.time())
                         self.last_artist_reset = math.floor(time.time())
+                        self.pause_unscale_animation_progress = 0
+                        self.pause_scale_animation_progress = -1
                     self.paused_time = math.floor(time.time())
                     self.paused = False
 
@@ -139,7 +142,7 @@ class SpotifyScreen:
 
                 # exit early if fullscreen
                 if self.current_art_img is not None:
-                    if show_fullscreen:
+                    if show_fullscreen or self.pause_unscale_animation_progress >= 0:
                         if self.pause_scale_animation_progress >= 0:
                             progress = self.pause_scale_animation_progress / self.pause_scale_total_frames
                             size = int(48 + (64 - 48) * progress)
@@ -151,15 +154,32 @@ class SpotifyScreen:
                             self.pause_scale_animation_progress += 1
                             if self.pause_scale_animation_progress >= self.pause_scale_total_frames:
                                 self.pause_scale_animation_progress = -1
-
-                                # Now actually update current_art_img to 64x64
                                 response = requests.get(self.current_art_url)
                                 img = Image.open(BytesIO(response.content))
                                 self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
+
+                            return (frame, self.is_playing)
+
+                        elif self.pause_unscale_animation_progress >= 0:
+                            progress = self.pause_unscale_animation_progress / self.pause_scale_total_frames
+                            size = int(64 - (64 - 48) * progress)
+                            resized = self.current_art_img.resize((size, size), resample=Image.LANCZOS)
+                            x = (self.canvas_width - size) // 2
+                            y = int(14 * progress)
+                            frame.paste(resized, (x, y))
+
+                            self.pause_unscale_animation_progress += 1
+                            if self.pause_unscale_animation_progress >= self.pause_scale_total_frames:
+                                self.pause_unscale_animation_progress = -1
+                                response = requests.get(self.current_art_url)
+                                img = Image.open(BytesIO(response.content))
+                                self.current_art_img = img.resize((48, 48), resample=Image.LANCZOS)
+
+                            return (frame, self.is_playing)
+
                         else:
                             frame.paste(self.current_art_img, (0,0))
-
-                        return (frame, self.is_playing)
+                            return (frame, self.is_playing)
                     else:
                         if self.slide_animation_progress >= 0 and self.previous_art_img:
                             offset = int((self.slide_animation_progress / self.slide_total_frames) * 56)  # 48 + margin
