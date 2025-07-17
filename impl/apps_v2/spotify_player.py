@@ -137,8 +137,9 @@ class SpotifyScreen:
                     self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
                 elif not show_fullscreen:
                     if self.current_art_url != art_url or self.current_title_for_slide != title:
-                        self.previous_art_img = self.current_art_img
-                        self.slide_animation_progress = 0
+                        if self.pause_unscale_animation_progress == -1:
+                            self.previous_art_img = self.current_art_img
+                            self.slide_animation_progress = 0
 
                         self.current_art_url = art_url
                         self.current_title_for_slide = title
