@@ -207,13 +207,15 @@ class SpotifyScreen:
                             break
 
                     if current_line:
-                        text_length = self.canvas_width - 12  # max width for wrapped text
+                        text_length = self.canvas_width - 6  # max width for wrapped text
                         words = current_line.split()
                         lines = []
                         current = ""
 
                         max_lines = 7
-                        for word in words:
+                        broke_early = False
+
+                        for i, word in enumerate(words):
                             test = f"{current} {word}".strip()
                             if self.font.getlength(test) <= text_length:
                                 current = test
@@ -221,16 +223,24 @@ class SpotifyScreen:
                                 lines.append(current)
                                 current = word
                                 if len(lines) == max_lines - 1:
+                                    # We have filled 6 lines, next is 7th
+                                    # If we still have words remaining, break early
+                                    if i < len(words) - 1:
+                                        broke_early = True
                                     break
 
+                        # Append the last line (7th)
                         if len(lines) < max_lines - 1:
+                            # fewer than 6 lines so just append current
                             lines.append(current)
                         else:
-                            # Truncate the last line with an ellipsis
-                            ellipsis = ".."
-                            while self.font.getlength(current + ellipsis) > text_length and current:
-                                current = current.rsplit(" ", 1)[0]
-                            lines.append((current + ellipsis).strip())
+                            # 7th line, truncate if broke_early (more text exists)
+                            if broke_early:
+                                ellipsis = ".."
+                                while self.font.getlength(current + ellipsis) > text_length and current:
+                                    current = current.rsplit(" ", 1)[0]
+                                current = (current + ellipsis).strip()
+                            lines.append(current)
 
                         # Center vertically in 48x48 box starting at y=14
                         line_height = 6  # adjust if needed based on your font
