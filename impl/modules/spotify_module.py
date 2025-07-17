@@ -80,6 +80,8 @@ class SpotifyModule:
                     artist = None
                     title = None
                     art_url = None
+                    duration_ms = None
+                    progress_ms = None
                     lyrics = None
                 else:
                     artist = track['item']['artists'][0]['name']
@@ -87,6 +89,8 @@ class SpotifyModule:
                         artist = artist + ", " + track['item']['artists'][1]['name']
                     title = track['item']['name']
                     art_url = track['item']['album']['images'][0]['url']
+                    duration_ms = track["item"]["duration_ms"]
+                    progress_ms = track["progress_ms"]
 
                     # lyrics
                     track_id = track['item']['id']
@@ -96,7 +100,7 @@ class SpotifyModule:
                         # print(self.last_lyrics)
                     lyrics = self.last_lyrics
 
-                self.isPlaying = track['is_playing']
-                self.queue.put((artist, title, art_url, self.isPlaying, track["progress_ms"], track["item"]["duration_ms"], lyrics))
+                    self.isPlaying = track['is_playing']
+                    self.queue.put((artist, title, art_url, self.isPlaying, progress_ms, duration_ms, lyrics))
         except Exception as e:
             print(e)
