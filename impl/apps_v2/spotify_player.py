@@ -242,7 +242,6 @@ class SpotifyScreen:
             frame = Image.new("RGB", (self.canvas_width, self.canvas_height), (0,0,0))
             draw = ImageDraw.Draw(frame)
 
-            self.current_art_url = ''
             self.is_playing = False
             self.title_animation_cnt = 0
             self.artist_animation_cnt = 0
