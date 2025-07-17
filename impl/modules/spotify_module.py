@@ -132,7 +132,6 @@ class SpotifyModule:
                     else:
                         is_previous = self.last_is_previous
 
-                    print(is_previous)
                     self.queue.put((artist, title, art_url, self.isPlaying, progress_ms, duration_ms, lyrics, is_previous))
 
         except Exception as e:
