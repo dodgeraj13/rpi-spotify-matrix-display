@@ -230,9 +230,6 @@ class SpotifyScreen:
                             frame.paste(self.current_art_img, (curr_x, 14))
 
                             self.slide_animation_progress += 1
-                            if self.slide_animation_progress >= self.slide_total_frames:
-                                self.slide_animation_progress = -1
-                                self.previous_art_img = None
                         else:
                             frame.paste(self.current_art_img, (8,14))
 
@@ -274,7 +271,7 @@ class SpotifyScreen:
                 draw.rectangle((0,line_y-1,0+round(((progress_ms / duration_ms) * 100) // 1.57), line_y), fill=self.play_color)
                 drawPlayPause(draw, self.is_playing, self.play_color)
 
-                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics'] and self.slide_animation_progress <= 0 and self.pause_scale_animation_progress == -1:
+                if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics'] and self.slide_animation_progress == -1 and self.pause_scale_animation_progress == -1:
                     lyric_lines = lyrics['lyrics']['lines']
                     current_time_ms = int(progress_ms)
 
@@ -338,6 +335,10 @@ class SpotifyScreen:
                             y = y_start + i * line_height
                             draw.text((x, y), line, fill=self.title_color, font=self.font)
                 
+                if self.slide_animation_progress >= self.slide_total_frames:
+                    self.slide_animation_progress = -1
+                    self.previous_art_img = None
+
                 return (frame, self.is_playing)
         else:
             #not active
