@@ -45,6 +45,9 @@ class SpotifyScreen:
         self.slide_animation_progress = -1  # -1 means no animation
         self.slide_total_frames = 12  # how many frames the animation lasts
 
+        self.pause_scale_animation_progress = -1
+        self.pause_scale_total_frames = 8
+
     def getCurrentPlaybackAsync(self):
         # delay spotify fetches
         time.sleep(3)
@@ -115,6 +118,7 @@ class SpotifyScreen:
 
                 # show fullscreen album art after pause delay
                 if show_fullscreen and self.current_art_img.size == (48, 48):
+                    self.pause_scale_animation_progress = 0
                     response = requests.get(self.current_art_url)
                     img = Image.open(BytesIO(response.content))
                     self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
@@ -136,7 +140,25 @@ class SpotifyScreen:
                 # exit early if fullscreen
                 if self.current_art_img is not None:
                     if show_fullscreen:
-                        frame.paste(self.current_art_img, (0,0))
+                        if self.pause_scale_animation_progress >= 0:
+                            progress = self.pause_scale_animation_progress / self.pause_scale_total_frames
+                            size = int(48 + (64 - 48) * progress)
+                            resized = self.current_art_img.resize((size, size), resample=Image.LANCZOS)
+                            x = (self.canvas_width - size) // 2
+                            y = int(14 * (1 - progress))
+                            frame.paste(resized, (x, y))
+
+                            self.pause_scale_animation_progress += 1
+                            if self.pause_scale_animation_progress >= self.pause_scale_total_frames:
+                                self.pause_scale_animation_progress = -1
+
+                                # Now actually update current_art_img to 64x64
+                                response = requests.get(self.current_art_url)
+                                img = Image.open(BytesIO(response.content))
+                                self.current_art_img = img.resize((self.canvas_width, self.canvas_height), resample=Image.LANCZOS)
+                        else:
+                            frame.paste(self.current_art_img, (0,0))
+
                         return (frame, self.is_playing)
                     else:
                         if self.slide_animation_progress >= 0 and self.previous_art_img:
