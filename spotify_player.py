@@ -8,12 +8,10 @@ Handles the display of Spotify track information and album art on the LED matrix
 import math
 import threading
 import time
-from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
-import numpy as np
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
@@ -40,20 +38,16 @@ class SpotifyPlayer:
         
         # Load font
         try:
-            # Try to load font from project root first, then relative to current file
             font_paths = [
                 Path("tiny.otf"),  # From project root
                 Path(__file__).parent / "tiny.otf"  # Relative to current file
             ]
             
-            font_loaded = False
             for font_path in font_paths:
                 if font_path.exists():
                     self.font = ImageFont.truetype(str(font_path), 5)
-                    font_loaded = True
                     break
-            
-            if not font_loaded:
+            else:
                 raise FileNotFoundError("Font file not found")
                 
         except (OSError, FileNotFoundError):
@@ -89,7 +83,6 @@ class SpotifyPlayer:
         self.thread = threading.Thread(target=self._get_current_playback_async, daemon=True)
         self.thread.start()
 
-
     def _get_current_playback_async(self):
         """Background thread for fetching Spotify playback data."""
         time.sleep(3)  # Initial delay
@@ -118,7 +111,7 @@ class SpotifyPlayer:
         if response is None:
             return self._generate_inactive_frame()
         
-        # Access attributes directly from the dataclass object
+        # Extract playback info
         artist = response.artist
         title = response.title
         art_url = response.art_url
@@ -236,10 +229,12 @@ class SpotifyPlayer:
         if show_fullscreen and self.current_art_url != art_url:
             self.current_art_url = art_url
             self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
-        elif not show_fullscreen and (self.current_art_url != art_url or 
-                                    (self.current_art_img and self.current_art_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT))):
-            self.current_art_url = art_url
-            self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
+        elif not show_fullscreen:
+            needs_update = (self.current_art_url != art_url or 
+                          (self.current_art_img and self.current_art_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT)))
+            if needs_update:
+                self.current_art_url = art_url
+                self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
     
 
     def _fetch_and_resize_image(self, url: str, width: int, height: int) -> Optional[Image.Image]:

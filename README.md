@@ -24,7 +24,18 @@ A modern Python application that displays Spotify album art and track informatio
 
 ## Installation
 
-### Option 1: Install from source
+### Option 1: Install from source (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/rpi-spotify-matrix-display.git
+cd rpi-spotify-matrix-display
+
+# Install dependencies using Makefile
+make install
+```
+
+### Option 2: Manual installation
 
 ```bash
 # Clone the repository
@@ -39,13 +50,57 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-### Option 2: Install with pip
+## Dependencies
+
+The project requires the following Python packages:
+- `Pillow>=11.3.0` - Image processing
+- `numpy>=2.3.2` - Numerical operations
+- `requests>=2.32.5` - HTTP requests
+- `spotipy>=2.25.1` - Spotify Web API wrapper
+- `RGBMatrixEmulator>=0.13.3` - Matrix emulator for development
+
+## Quick Start
+
+### Using Makefile (Recommended)
 
 ```bash
-pip install rpi-spotify-matrix-display
+# Install dependencies
+make install
+
+# Run on Raspberry Pi with LED matrix
+make run
+
+# Run in emulator for testing
+make emulate
+
+# Run with fullscreen album art on hardware
+make run-fullscreen
+
+# Run with fullscreen album art in emulator
+make emulate-fullscreen
+
+# Show all available commands
+make help
 ```
 
+### Manual Commands
 
+```bash
+# Run display on a matrix
+python main.py
+
+# Emulate the display
+python main.py -e
+
+# Show fullscreen album art (can combine with -e)
+python main.py -f
+```
+
+### Command Line Options
+
+- `-e, --emulated`: Run in matrix emulator mode
+- `-f, --fullscreen`: Always display album art in fullscreen
+- `-h, --help`: Show help message
 
 ## Configuration
 
@@ -84,33 +139,22 @@ shutdown_delay = 30
 client_id = your_client_id_here
 client_secret = your_client_secret_here
 redirect_uri = http://127.0.0.1:8080/callback
-device_whitelist = ['Marantz AVR', 'Samsung TV']
+; device_whitelist = ['Marantz AVR', 'Samsung TV']
 ```
 
-## Usage
+### Emulator Configuration
 
-### Basic Usage
+Customize the emulator appearance with `emulator_config.json`:
 
-```bash
-# Run with default configuration
-python main.py
-
-# Run with custom config file
-python main.py -c /path/to/config.ini
-
-# Run in emulator mode (for testing)
-python main.py -e
-
-# Always show fullscreen album art
-python main.py -f
+```json
+{
+    "pixel_glow": 6,
+    "pixel_size": 8,
+    "pixel_style": "square",
+    "pixel_outline": 0,
+    "display_adapter": "pygame"
+}
 ```
-
-### Command Line Options
-
-- `-e, --emulated`: Run in matrix emulator mode
-- `-f, --fullscreen`: Always display album art in fullscreen
-- `-c, --config`: Path to configuration file
-- `-h, --help`: Show help message
 
 ## Development
 
@@ -118,18 +162,26 @@ python main.py -f
 
 ```
 rpi-spotify-matrix-display/
-├── main.py                  # Main controller
-├── config_manager.py         # Configuration management
-├── spotify_player.py         # Spotify player application
-├── spotify_module.py         # Core Spotify module
-├── tiny.otf                 # Font file for text display
-├── pyproject.toml           # Project configuration
-└── README.md                # This file
+├── main.py                  # Main controller and entry point
+├── spotify_player.py        # Spotify player display logic
+├── spotify_module.py        # Core Spotify API integration
+├── config.ini              # Default configuration file
+├── emulator_config.json    # Emulator appearance settings
+├── tiny.otf                # Font file for text display
+├── pyproject.toml          # Project configuration and dependencies
+├── Makefile                # Build and run commands
+└── README.md               # This file
 ```
 
+### Available Make Commands
 
-
-
+- `make install` - Install package dependencies
+- `make run` - Run on Raspberry Pi with LED matrix
+- `make emulate` - Run in emulator window for testing
+- `make run-fullscreen` - Run on hardware with fullscreen artwork
+- `make emulate-fullscreen` - Run in emulator with fullscreen artwork
+- `make clean` - Reset repository to clean state
+- `make help` - Show all available commands
 
 ## Spotify API Setup
 
@@ -155,6 +207,10 @@ Adjust `gpio_slowdown` based on your setup:
 - **Value 1**: Standard Raspberry Pi
 - **Value 2**: Raspberry Pi 2/3
 - **Value 3**: Raspberry Pi 4
+
+## Screenshots
+
+![Matrix Display Screenshot](screenshot.png)
 
 ## Troubleshooting
 
@@ -192,6 +248,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) - LED matrix library
 - [spotipy](https://spotipy.readthedocs.io/) - Spotify Web API wrapper
 - [Pillow](https://python-pillow.org/) - Image processing library
+- [RGBMatrixEmulator](https://github.com/rm-hull/rgb-matrix-emulator) - Matrix emulator for development
 
 ## Changelog
 
@@ -203,3 +260,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Cleaner architecture and separation of concerns
 - Support for environment variables
 - Enhanced documentation and examples
+- Added Makefile for easy development workflow
+- Integrated emulator support for testing

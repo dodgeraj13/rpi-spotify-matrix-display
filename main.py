@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-main.py: Starting point for Raspberry Pi Spotify Matrix Display
- - Run using "make run" or "make run-emulator"
+main.py: Entry point for Raspberry Pi Spotify Matrix Display
+ - Run using "make run" or "make emulate"
  - Use "make help" for more options
 """
 
@@ -15,11 +15,10 @@ from spotify_player import SpotifyPlayer
 from spotify_module import SpotifyModule
 
 
-def load_config(config_path: Path) -> configparser.ConfigParser:
-    """Load configuration from INI file."""
+def load_config(config_path: str) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
-    
-    if not config_path.exists():
+
+    if not Path(config_path).exists():
         print(f"Configuration file not found: {config_path}")
         sys.exit(1)
     
@@ -32,7 +31,13 @@ def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
     if is_emulated:
         from RGBMatrixEmulator import RGBMatrix, RGBMatrixOptions
     else:
-        from rgbmatrix import RGBMatrix, RGBMatrixOptions
+        try:
+            from rgbmatrix import RGBMatrix, RGBMatrixOptions
+        except ImportError:
+            print("❌ Error: Could not import 'rgbmatrix' module.")
+            print("💡 This command is meant for running on a Raspberry Pi connected to an RGB matrix.")
+            print("   Use 'make emulate' to emulate the Spotify display on your screen.")
+            sys.exit(1)
     
     options = RGBMatrixOptions()
     options.hardware_mapping = config.get('Matrix', 'hardware_mapping', fallback='regular')
@@ -48,13 +53,13 @@ def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
 
 def main():
     parser = argparse.ArgumentParser(description='Raspberry Pi Spotify Matrix Display')
-    parser.add_argument('-f', '--fullscreen', action='store_true', help='Display fullscreen art')
+    parser.add_argument('-f', '--fullscreen', action='store_true', help='Always display fullscreen art')
     parser.add_argument('-e', '--emulated', action='store_true', help='Run in emulator')
     
     args = parser.parse_args()
     
     try:
-        config = load_config(args.config)
+        config = load_config('config.ini')
         matrix = setup_matrix(config, args.emulated)
         
         spotify_module = SpotifyModule(config)
