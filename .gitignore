@@ -3,5 +3,5 @@ __pycache__
 lib
 bin
 rpi-rgb-led-matrix
-impl/.cache
+.cache
 .venv

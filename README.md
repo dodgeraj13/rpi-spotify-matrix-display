@@ -1,67 +1,205 @@
-# rpi-spotify-matrix-display
+# Raspberry Pi Spotify Matrix Display
 
-A Spotify display for 64x64 RGB LED matrices (raspberry pi project v2)
+A modern Python application that displays Spotify album art and track information on an LED matrix display. Built with modern Python practices, type hints, and clean architecture.
 
-![emulator screenshot](screenshot.png)
+## Features
 
-> [!NOTE]
-> You can run this project either on a raspberry pi connected to an rgb matrix or in a window that emulates a matrix display. If you don't have the components yet, emulation is a great option!
+- 🎵 **Real-time Spotify Integration**: Display currently playing track information
+- 🖼️ **Album Art Display**: Show album artwork in fullscreen or compact mode
+- 📱 **Smart Display Modes**: Automatic switching between info and fullscreen views
+- 🎨 **Smooth Animations**: Scrolling text for long track titles and artist names
+- ⚙️ **Flexible Configuration**: Support for both INI files and environment variables
+- 🖥️ **Emulator Support**: Test on your computer before deploying to Raspberry Pi
+- 🐍 **Modern Python**: Built with Python 3.8+, type hints, and best practices
 
-## Hardware
-[Here is the list](https://www.reddit.com/r/raspberry_pi/comments/ombwwg/my_64x64_rgb_led_matrix_album_art_display_pi_3b/) of hardware I used. You can ignore the software details as they are irrelevant for v2.
+## Requirements
 
-## Spotify Pre-Setup
-1. Go to https://developer.spotify.com/dashboard
-2. Create an account and/or login
-3. Select "Create app" (name/description does not matter)
-4. Add http://127.0.0.1:8080/callback under Redirect URIs
-5. Save, then tap "Settings" in the upper right
-6. Copy the generated Client ID and Secret ID for later
+- Python 3.8 or higher
+- Spotify Premium account
+- Spotify API credentials
 
-## Pi Setup
+### Matrix Display Options
+- **Emulator Mode**: Works on any computer for testing
+- **Hardware Mode**: Requires building `rpi-rgb-led-matrix` from source on Raspberry Pi
 
-> [!IMPORTANT]
-> Please see the [pi setup wiki page](https://github.com/kylejohnsonkj/rpi-spotify-matrix-display/wiki/raspberry-pi-full-setup-guide) for a full installation guide!
+## Installation
 
-https://github.com/user-attachments/assets/9bf163f9-8e0f-47cc-b2d2-a62b3a975471
+### Option 1: Install from source
 
-<sup>The above video is from [my reddit post here.](https://www.reddit.com/r/raspberry_pi/comments/ziz4hk/my_64x64_rgb_led_matrix_album_art_display_pi_3b/)</sup>
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/rpi-spotify-matrix-display.git
+cd rpi-spotify-matrix-display
 
-## Emulator Setup
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-1. Clone and enter the repo
-   - `git clone --recurse-submodules https://github.com/kylejohnsonkj/rpi-spotify-matrix-display`
-   - `cd rpi-spotify-matrix-display/`
-2. **Set your Client ID and Secret ID in the config.ini** 🙂
-3. Create and activate a python [virtual environment](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/)
-   - `python3 -m venv .venv`
-   - `source .venv/bin/activate`
-4. Install dependencies
-   - `python3 -m pip install -r requirements.txt`
-5. Run the controller emulated (-e) from the impl/ directory
-   - `cd impl/`
-   - `python3 controller_v3.py -e`
-6. Authorize Spotify
-   - After running, follow instructions provided in the console. Pasted link should begin with http://127.0.0.1:8080/callback
-   - After successful authorization, play a song and the display will appear!
+# Install dependencies
+pip install -e .
+```
 
-## Arguments
-| Argument | Default | Description |
-| :- | :- | :- |
-|`-e` , `--emulated`| false | Run in a matrix emulator |
-|`-f` , `--fullscreen`| false | Always display album art in full screen (64x64) |
-|`-h` , `--help`| false | Display help messages for arguments |
+### Option 2: Install with pip
+
+```bash
+pip install rpi-spotify-matrix-display
+```
+
+
 
 ## Configuration
-Configuration is handled in the config.ini. I have included my own as a sample.
 
-For Matrix configuration, see https://github.com/hzeller/rpi-rgb-led-matrix#changing-parameters-via-command-line-flags. More extensive customization can be done in `impl/controller_v3.py` directly.
+### Environment Variables
 
-For Spotify configuration, set the `client_id` and `client_secret` to your own. You may leave `redirect_uri` alone. I have also included a `device_whitelist` which is disabled by default.
+You can configure the application using environment variables:
 
-## Acknowledgements
-Thanks to allenslab for providing the original codebase for this project, [matrix-dashboard](https://github.com/allenslab/matrix-dashboard). You can find his original reddit post [here](https://www.reddit.com/r/3Dprinting/comments/ujyy4g/i_designed_and_3d_printed_a_led_matrix_dashboard/). This project is an adaption of his Spotify app for 64x64 matrices, while also packing some other improvements.
+```bash
+# Matrix configuration
+export MATRIX_HARDWARE_MAPPING="adafruit-hat-pwm"
+export MATRIX_BRIGHTNESS="50"
+export MATRIX_GPIO_SLOWDOWN="2"
+export MATRIX_REFRESH_RATE="100"
+export MATRIX_SHUTDOWN_DELAY="30"
 
-Thanks to ty-porter for [his fork](https://github.com/ty-porter/matrix-dashboard) of matrix-dashboard from which my development branched from. The emulation support his [RGBMatrixEmulator project](https://github.com/ty-porter/RGBMatrixEmulator) added made it a breeze to develop efficiently.
+# Spotify configuration
+export SPOTIFY_CLIENT_ID="your_client_id"
+export SPOTIFY_CLIENT_SECRET="your_client_secret"
+export SPOTIFY_REDIRECT_URI="http://127.0.0.1:8080/callback"
+export SPOTIFY_DEVICE_WHITELIST="Marantz AVR,Samsung TV"
+```
 
-And finally, thanks to hzeller for his work on [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix).
+### Configuration File
+
+Alternatively, create a `config.ini` file:
+
+```ini
+[Matrix]
+hardware_mapping = adafruit-hat-pwm
+brightness = 50
+gpio_slowdown = 2
+limit_refresh_rate_hz = 100
+shutdown_delay = 30
+
+[Spotify]
+client_id = your_client_id_here
+client_secret = your_client_secret_here
+redirect_uri = http://127.0.0.1:8080/callback
+device_whitelist = ['Marantz AVR', 'Samsung TV']
+```
+
+## Usage
+
+### Basic Usage
+
+```bash
+# Run with default configuration
+python main.py
+
+# Run with custom config file
+python main.py -c /path/to/config.ini
+
+# Run in emulator mode (for testing)
+python main.py -e
+
+# Always show fullscreen album art
+python main.py -f
+```
+
+### Command Line Options
+
+- `-e, --emulated`: Run in matrix emulator mode
+- `-f, --fullscreen`: Always display album art in fullscreen
+- `-c, --config`: Path to configuration file
+- `-h, --help`: Show help message
+
+## Development
+
+### Project Structure
+
+```
+rpi-spotify-matrix-display/
+├── main.py                  # Main controller
+├── config_manager.py         # Configuration management
+├── spotify_player.py         # Spotify player application
+├── spotify_module.py         # Core Spotify module
+├── tiny.otf                 # Font file for text display
+├── pyproject.toml           # Project configuration
+└── README.md                # This file
+```
+
+
+
+
+
+## Spotify API Setup
+
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new application
+3. Get your `client_id` and `client_secret`
+4. Add `http://127.0.0.1:8080/callback` to redirect URIs
+5. Update your configuration with the credentials
+
+## Hardware Setup
+
+### LED Matrix
+
+This project supports various LED matrix configurations:
+
+- **Adafruit HAT**: Use `hardware_mapping = adafruit-hat-pwm`
+- **Regular**: Use `hardware_mapping = regular`
+- **Custom**: Refer to [rpi-rgb-led-matrix documentation](https://github.com/hzeller/rpi-rgb-led-matrix)
+
+### GPIO Configuration
+
+Adjust `gpio_slowdown` based on your setup:
+- **Value 1**: Standard Raspberry Pi
+- **Value 2**: Raspberry Pi 2/3
+- **Value 3**: Raspberry Pi 4
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Matrix not displaying**: Check GPIO permissions and hardware mapping
+2. **Spotify authentication fails**: Verify API credentials and redirect URI
+3. **Poor performance**: Adjust refresh rate and GPIO slowdown settings
+4. **Font not loading**: Ensure `tiny.otf` is present
+
+### Debug Mode
+
+Enable debug output by setting environment variable:
+
+```bash
+export DEBUG=1
+python main.py
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Run quality checks
+6. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) - LED matrix library
+- [spotipy](https://spotipy.readthedocs.io/) - Spotify Web API wrapper
+- [Pillow](https://python-pillow.org/) - Image processing library
+
+## Changelog
+
+### Version 2.0.0
+- Complete rewrite with modern Python practices
+- Type hints throughout the codebase
+- Improved error handling and logging
+- Better configuration management
+- Cleaner architecture and separation of concerns
+- Support for environment variables
+- Enhanced documentation and examples
