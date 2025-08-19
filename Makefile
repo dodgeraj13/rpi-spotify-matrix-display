@@ -5,8 +5,9 @@ help: ## Show this help message
 install: ## Install package dependencies
 	pip install -e .
 
-clean: ## Clean build folder
-	rm -rf build/ dist/ *.egg-info/
+clean: ## Clean build folder and virtual environment
+	rm -rf build/ dist/ *.egg-info/ .venv/
+	rm -f .cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 

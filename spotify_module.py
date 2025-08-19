@@ -9,7 +9,7 @@ import os
 import time
 from dataclasses import dataclass
 from queue import LifoQueue
-from typing import Optional, Tuple
+from typing import Optional
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -57,22 +57,18 @@ class SpotifyModule:
                 self.invalid = True
                 return
             
-            # Set environment variables for spotipy
             os.environ["SPOTIPY_CLIENT_ID"] = spotify_config.client_id
             os.environ["SPOTIPY_CLIENT_SECRET"] = spotify_config.client_secret
             os.environ["SPOTIPY_REDIRECT_URI"] = spotify_config.redirect_uri
             
-            # Initialize authentication
             self.auth_manager = SpotifyOAuth(
                 scope=spotify_config.scope,
                 open_browser=False
             )
             
-            # Get authorization URL for first-time setup
             auth_url = self.auth_manager.get_authorize_url()
             print(f"Please visit this URL to authorize: {auth_url}")
             
-            # Initialize Spotify client
             self.sp = spotipy.Spotify(
                 auth_manager=self.auth_manager,
                 requests_timeout=10
@@ -125,9 +121,7 @@ class SpotifyModule:
             devices = self.sp.devices()
             device_whitelist = spotify_section['device_whitelist']
             
-            # Parse whitelist if it's a string representation
             if isinstance(device_whitelist, str):
-                # Simple parsing for comma-separated devices
                 whitelist_devices = [d.strip().strip("'\"") for d in device_whitelist.strip('[]').split(',')]
             else:
                 whitelist_devices = device_whitelist
@@ -153,9 +147,7 @@ class SpotifyModule:
             if not track or not self.is_device_whitelisted():
                 return None
             
-            # Extract track information
             if track['item'] is None:
-                # No track currently playing
                 playback_info = PlaybackInfo(
                     artist=None,
                     title=None,
@@ -165,14 +157,12 @@ class SpotifyModule:
                     duration_ms=0
                 )
             else:
-                # Extract artist information
                 artists = track['item']['artists']
                 if len(artists) >= 2:
                     artist = f"{artists[0]['name']}, {artists[1]['name']}"
                 else:
                     artist = artists[0]['name']
                 
-                # Extract other track information
                 title = track['item']['name']
                 art_url = track['item']['album']['images'][0]['url'] if track['item']['album']['images'] else None
                 
@@ -186,8 +176,6 @@ class SpotifyModule:
                 )
             
             self.is_playing = track['is_playing']
-            
-            # Add to queue for the display thread
             self.queue.put(playback_info)
             
             return playback_info
