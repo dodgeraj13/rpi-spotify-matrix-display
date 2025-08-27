@@ -6,3 +6,4 @@ rpi-rgb-led-matrix
 .cache
 .venv
 *.egg-info
+.vscode
