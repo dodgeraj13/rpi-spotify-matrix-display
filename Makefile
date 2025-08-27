@@ -18,13 +18,13 @@ clean: ## Reset repo to a clean state
 	find . -type f -name "*.pyc" -delete
 
 run: ## Run the display on a raspberry pi connected matrix
-	python main.py
+	.venv/bin/python main.py
 
 emulate: ## Run the display in an emulator window
-	python main.py -e
+	.venv/bin/python main.py -e
 
 run-fullscreen: ## Run the display on a raspberry pi connected matrix with fullscreen artwork
-	python main.py -f
+	.venv/bin/python main.py -f
 
 emulate-fullscreen: ## Run the display in an emulator window with fullscreen artwork
-	python main.py -ef
+	.venv/bin/python main.py -ef
