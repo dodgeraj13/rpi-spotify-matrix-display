@@ -32,9 +32,9 @@ class SpotifyPlayer:
     FETCH_INTERVAL = 1
     
 
-    def __init__(self, config, spotify_module: SpotifyModule, fullscreen: bool = False):
+    def __init__(self, config, spotify_module: SpotifyModule):
         self.spotify_module = spotify_module
-        self.full_screen_always = fullscreen
+        self.always_fullscreen = config.getboolean('Matrix', 'always_fullscreen', fallback=False)
         
         # Load font
         try:
@@ -127,7 +127,7 @@ class SpotifyPlayer:
         if current_time - self.last_active_time >= self.shutdown_delay:
             return self.black_screen
         
-        if self.full_screen_always:
+        if self.always_fullscreen:
             return self._generate_fullscreen_frame(art_url, is_playing)
         else:
             return self._generate_now_playing_frame(

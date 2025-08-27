@@ -53,8 +53,7 @@ def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
 
 def main():
     parser = argparse.ArgumentParser(description='Raspberry Pi Spotify Matrix Display')
-    parser.add_argument('-f', '--fullscreen', action='store_true', help='Always display fullscreen art')
-    parser.add_argument('-e', '--emulated', action='store_true', help='Run in emulator')
+    parser.add_argument('-e', '--emulate', action='store_true', help='Run in emulator')
     
     args = parser.parse_args()
     
@@ -63,7 +62,7 @@ def main():
         matrix = setup_matrix(config, args.emulated)
         
         spotify_module = SpotifyModule(config)
-        spotify_player = SpotifyPlayer(config, spotify_module, args.fullscreen)
+        spotify_player = SpotifyPlayer(config, spotify_module)
         
         print("Starting Spotify Matrix Display...")
         

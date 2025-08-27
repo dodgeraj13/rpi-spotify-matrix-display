@@ -22,9 +22,3 @@ run: ## Run the display on a raspberry pi connected matrix
 
 emulate: ## Run the display in an emulator window
 	.venv/bin/python main.py -e
-
-run-fullscreen: ## Run the display on a raspberry pi connected matrix with fullscreen artwork
-	.venv/bin/python main.py -f
-
-emulate-fullscreen: ## Run the display in an emulator window with fullscreen artwork
-	.venv/bin/python main.py -ef
