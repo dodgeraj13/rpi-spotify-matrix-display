@@ -59,7 +59,7 @@ def main():
     
     try:
         config = load_config('config.ini')
-        matrix = setup_matrix(config, args.emulated)
+        matrix = setup_matrix(config, args.emulate)
         
         spotify_module = SpotifyModule(config)
         spotify_player = SpotifyPlayer(config, spotify_module)
