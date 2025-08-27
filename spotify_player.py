@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-Spotify Player Screen Module
-
-Handles the display of Spotify track information and album art on the LED matrix.
+spotify_player.py: Handles the display of Spotify track information and album art on the LED matrix.
 """
 
 import math

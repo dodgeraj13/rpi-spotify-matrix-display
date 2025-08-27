@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
 main.py: Entry point for Raspberry Pi Spotify Matrix Display
- - Run using "make run" or "make emulate"
- - Use "make help" for more options
+ - Parses command line arguments
+ - Loads config
+ - Prepares matrix
+ - Sets up Spotify module (API)
+ - Sets up Spotify player
+ - Runs main loop
 """
 
 import argparse
@@ -63,8 +67,6 @@ def main():
         
         spotify_module = SpotifyModule(config)
         spotify_player = SpotifyPlayer(config, spotify_module)
-        
-        print("Starting Spotify Matrix Display...")
         
         while True:
             frame = spotify_player.generate()

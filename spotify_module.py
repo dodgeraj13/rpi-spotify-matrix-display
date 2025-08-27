@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-Spotify Module
-
-Handles Spotify API integration and authentication for the matrix display.
+spotify_module.py: Spotify API integration and authentication for the matrix display.
 """
 
 import os
@@ -63,8 +61,6 @@ class SpotifyModule:
                 scope="user-read-currently-playing, user-read-playback-state",
                 open_browser=False
             )
-            auth_url = self.auth_manager.get_authorize_url()
-            print(f"Please visit this URL to authorize: {auth_url}")
             
             self.spotify = spotipy.Spotify(
                 auth_manager=self.auth_manager,
