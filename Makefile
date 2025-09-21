@@ -18,8 +18,8 @@ install: ## Install package dependencies and request Spotify credentials
 	@echo ""
 	@echo "✅ rpi-spotify-matrix-display successfully installed!"
 	@echo ""
-	@echo "🍓 To run on an pi-connected matrix: \033[1;36mmake run\033[0m"
-	@echo "🖥️  To run within an emulator window: \033[1;36mmake emulate\033[0m"
+	@echo "🧮 To run on an pi-connected matrix: \033[1;36mmake run\033[0m"
+	@echo "🖥️ To run within an emulator window: \033[1;36mmake emulate\033[0m"
 
 clean: ## Reset repo to a clean state
 	rm -rf build/ dist/ *.egg-info/ .venv/
@@ -30,5 +30,5 @@ clean: ## Reset repo to a clean state
 run: ## Run the display on a raspberry pi connected matrix
 	.venv/bin/python main.py
 
-emulate: ## Run the display in an emulator window
+emulate: ## Run the display within an emulator window
 	.venv/bin/python main.py -e
