@@ -4,9 +4,9 @@ main.py: Entry point for Raspberry Pi Spotify Matrix Display
  - Parses command line arguments
  - Loads config
  - Prepares matrix
- - Sets up Spotify module (API)
+ - Connects to Spotify API (via spotipy)
  - Sets up Spotify player
- - Runs main loop
+ - Runs main loop, until interrupted
 """
 
 import argparse
@@ -15,9 +15,8 @@ import sys
 import time
 from pathlib import Path
 
-from spotify_player import SpotifyPlayer
 from spotify_module import SpotifyModule
-
+from spotify_player import SpotifyPlayer
 
 def load_config(config_path: str) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
@@ -31,7 +30,6 @@ def load_config(config_path: str) -> configparser.ConfigParser:
 
 
 def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
-    """Setup the LED matrix."""
     if is_emulated:
         from RGBMatrixEmulator import RGBMatrix, RGBMatrixOptions
     else:
@@ -40,7 +38,7 @@ def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
         except ImportError:
             print("❌ Error: Could not import 'rgbmatrix' module.")
             print("💡 This command is meant for running on a Raspberry Pi connected to an RGB matrix.")
-            print("   Use 'make emulate' to emulate the Spotify display on your screen.")
+            print("   Use 'make emulate' to run the display within an emulator window.")
             sys.exit(1)
     
     options = RGBMatrixOptions()
@@ -57,8 +55,7 @@ def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
 
 def main():
     parser = argparse.ArgumentParser(description='Raspberry Pi Spotify Matrix Display')
-    parser.add_argument('-e', '--emulate', action='store_true', help='Run in emulator')
-    
+    parser.add_argument('-e', '--emulate', action='store_true', help='run within an emulator window')
     args = parser.parse_args()
     
     try:
