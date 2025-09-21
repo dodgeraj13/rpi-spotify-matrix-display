@@ -1,9 +1,9 @@
 __pycache__
+.venv
+.vscode
+rpi-rgb-led-matrix
 .DS_Store
 lib
 bin
-rpi-rgb-led-matrix
 .cache
-.venv
 *.egg-info
-.vscode
