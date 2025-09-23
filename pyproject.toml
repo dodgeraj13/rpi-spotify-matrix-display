@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rpi-spotify-matrix-display"
 version = "2.0.0"
-description = "Raspberry Pi Spotify Matrix Display - Display Spotify album art on LED matrix"
+description = "Raspberry Pi Spotify Matrix Display"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.8"
 dependencies = [
     "Pillow>=11.3.0",
