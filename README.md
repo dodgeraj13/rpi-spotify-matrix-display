@@ -22,7 +22,7 @@ A Spotify display for 64x64 RGB LED matrices.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/yourusername/rpi-spotify-matrix-display.git
+git clone https://github.com/kylejohnsonkj/rpi-spotify-matrix-display.git
 
 # 2. Enter the repo
 cd rpi-spotify-matrix-display
@@ -58,18 +58,20 @@ Don't have a Raspberry Pi or RGB matrix yet? No worries! Feel free to mess aroun
 
 I also 3d printed a [matrix stand](https://www.thingiverse.com/thing:3781875) and a [pi mount](https://www.thingiverse.com/thing:2732552) for my [own build](https://imgur.com/a/64x64-album-art-matrix-backside-AjrOa5e).
 
-Once you have all the components, you can proceed with the hardware setup.
+Once you have all the parts, expand and proceed with the Rasperry Pi Setup below!
 
 <details>
-<summary>Hardware Guide</summary>
+<summary>Raspberry Pi Setup</summary>
 
 #### Step 1: Install Pi OS
-- [Download the Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-- Choose your Raspberry Pi
-- Select `Raspberry Pi OS (Other) - OS Lite (64bit)`
-- Set hostname (I put matrix), set pass (I kept user as pi)
-- Enter wifi credentials
-- Enable ssh using password
+- [Download and open the Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+    - Select your Raspberry Pi
+    - Select `Raspberry Pi OS (other) - Raspberry Pi OS Lite (64-bit)`
+    - Select your microSD card
+- Tap "Next" and edit OS customization settings
+    - Set hostname (I put matrix), set user/pass (I kept user as pi)
+    - Enter wifi credentials
+    - Enable ssh using password authentication
 - When done, insert microSD card in pi and wait a few min for boot up
 
 #### Step 2: Login via ssh
