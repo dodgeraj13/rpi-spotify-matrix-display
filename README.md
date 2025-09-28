@@ -1,76 +1,93 @@
-# Raspberry Pi Spotify Matrix Display
+# rpi-spotify-matrix-display
 
-## Features
+A Spotify display for 64x64 RGB LED matrices.
 
-- 🎵 **Real-time Spotify Integration**: Display currently playing track information
-- 🖼️ **Display Modes**: Show album artwork in fullscreen or compact mode
-- 🎨 **Smooth Animations**: Scrolling text for long track titles and artist names
-- 🖥️ **Emulator Support**: Test on your computer before deploying to Raspberry Pi
+- **🎵 Spotify API Integration** – Show off your currently playing track
+- **🖼️ Multiple Modes** – Display album artwork alongside track details or fullscreen
+- **🚗 Scrolling Text** – Auto-scrolling text for long track titles and artist names
+- **⏯️ Playback Indicators** – Play/pause indicator and track progression bar
+- **🖥️ Emulator Support** – Test on your computer before deploying to a Raspberry Pi
+
+<br>
+
+![emulator screenshot](screenshot.png)
+
+## Spotify Setup
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app _(name/description can be anything)_
+3. Add http://127.0.0.1:8080/callback to Redirect URIs
+4. Save and copy the Client ID and Secret for later
 
 ## Installation
 
 ```bash
-# Clone the repository
+# 1. Clone the repo
 git clone https://github.com/yourusername/rpi-spotify-matrix-display.git
 
-# Enter the repo
+# 2. Enter the repo
 cd rpi-spotify-matrix-display
 
-# Install using Makefile
+# 3. Make the project (will request client/secret)
 make
 ```
 
-## Quick Start
-
-
+## How to Run
 ```bash
-# Install dependencies
-make install
-
-# Run on Raspberry Pi with LED matrix
+# For a Raspberry Pi connected to a matrix
 make run
 
-# Run in emulator (no pi/matrix required)
+# Otherwise, emulate using
 make emulate
-
-# Reset repository to a clean state
-make clean
-
-# Show all available commands
-make help
 ```
 
-```
-rpi-spotify-matrix-display/
-├── main.py                 # Main controller and entry point
-├── spotify_player.py       # Spotify display logic
-├── spotify_module.py       # Spotify API integration
-├── config.ini              # Matrix and Spotify configuration
-├── emulator_config.json    # Emulator configuration
-├── pyproject.toml          # Project setup and dependencies
-├── Makefile                # Useful run commands
-├── LICENSE                 # GNU General Public License
-├── tiny.otf                # Display font
-├── screenshot.png          # Preview screenshot
-└── README.md               # This file
-```
+After running, follow instructions provided in the console. Pasted link should begin with http://127.0.0.1:8080/callback. After successful authorization, play a song and the display will appear!
 
-## Spotify API Setup
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app _(name/description can be anything)_
-4. Add http://127.0.0.1:8080/callback to Redirect URIs
-5. Save and copy Client ID and Secret for later
+---
 
-## Screenshots
+### Building Your Own Display
 
-![Matrix Display Screenshot](screenshot.png)
+Don't have a Raspberry Pi or RGB matrix yet? No worries! Feel free to mess around with emulation and come back to this section once you're ready.
 
-## Changelog
+**Parts List**
 
-### Version 2.0
-- Complete rewrite for cleaner architecture
-- Migrated from requirements.txt to pyproject.toml
-- Added Makefile for useful run commands
+- [Adafruit 64x64 RGB LED Matrix - 2.5mm Pitch - 1/32 Scan](https://www.adafruit.com/product/3649)
+- [Adafruit RGB Matrix Bonnet for Raspberry Pi](https://www.adafruit.com/product/3211)
+- [Raspberry Pi 3B+](https://www.raspberrypi.com/products/raspberry-pi-3-model-b-plus/) (or newer)
+- Any microSD card
+- [5V 10A Power Supply Adapter](https://www.amazon.com/gp/product/B08HCS1X66)
 
-### Version 1.0
-- Fork of matrix-dashboard project
+I also 3d printed a [matrix stand](https://www.thingiverse.com/thing:3781875) and a [pi mount](https://www.thingiverse.com/thing:2732552) for my [own build](https://imgur.com/a/64x64-album-art-matrix-backside-AjrOa5e).
+
+Once you have all the components, you can proceed with the hardware setup.
+
+<details>
+<summary>Hardware Guide</summary>
+
+#### Step 1: Install Pi OS
+- [Download the Raspberry Pi Imager](https://www.raspberrypi.com/software/)
+- Choose your Raspberry Pi
+- Select `Raspberry Pi OS (Other) - OS Lite (64bit)`
+- Set hostname (I put matrix), set pass (I kept user as pi)
+- Enter wifi credentials
+- Enable ssh using password
+- When done, insert microSD card in pi and wait a few min for boot up
+
+#### Step 2: Login via ssh
+- `ssh pi@matrix.local`
+- This puts you in the `/home/pi` directory
+- You can use `pwd` to confirm where you are throughout this process
+
+#### Step 3: Update packages and install git
+- `sudo apt update` (get latest packages)
+- `sudo apt upgrade` (upgrade out of date packages)
+- `sudo apt install git`
+
+#### Step 4: Proceed with the Installation instructions above
+</details>
+
+---
+
+### Acknowledgements
+- allenslab for creating the original [matrix-dashboard](https://www.reddit.com/r/3Dprinting/comments/ujyy4g/i_designed_and_3d_printed_a_led_matrix_dashboard/) code
+- typorter for the [RGBMatrixEmulator](https://github.com/ty-porter/RGBMatrixEmulator) project
+- hzeller for the [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library
