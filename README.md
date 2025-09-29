@@ -22,7 +22,7 @@ A Spotify display for 64x64 RGB LED matrices.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/kylejohnsonkj/rpi-spotify-matrix-display.git
+git clone --recurse-submodules https://github.com/kylejohnsonkj/rpi-spotify-matrix-display
 
 # 2. Enter the repo
 cd rpi-spotify-matrix-display
