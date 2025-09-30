@@ -42,8 +42,8 @@ optimize: ## Optimize matrix performance
 	@changed=0; \
 	if ! grep -q "isolcpus=3" /boot/cmdline.txt; then \
 		echo "⚙️  Adding isolcpus=3 to /boot/cmdline.txt..."; \
-		cp /boot/cmdline.txt /boot/cmdline.txt.tmp; \
-		sed -i 's/$$/ isolcpus=3/' /boot/cmdline.txt.tmp; \
+		sudo cp /boot/cmdline.txt /boot/cmdline.txt.tmp; \
+		sudo sed -i 's/$$/ isolcpus=3/' /boot/cmdline.txt.tmp; \
 		sudo mv /boot/cmdline.txt.tmp /boot/cmdline.txt; \
 		echo "✅ isolcpus=3 added."; \
 		changed=1; \
