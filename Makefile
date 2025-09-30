@@ -40,11 +40,11 @@ build-matrix: ## Build rpi-rgb-led-matrix and install its python bindings
 
 optimize: ## Optimize matrix performance
 	@changed=0; \
-	if ! grep -q "isolcpus=3" /boot/cmdline.txt; then \
-		echo "⚙️  Adding isolcpus=3 to /boot/cmdline.txt..."; \
-		sudo cp /boot/cmdline.txt /boot/cmdline.txt.tmp; \
-		sudo sed -i 's/$$/ isolcpus=3/' /boot/cmdline.txt.tmp; \
-		sudo mv /boot/cmdline.txt.tmp /boot/cmdline.txt; \
+	if ! grep -q "isolcpus=3" /boot/firmware/cmdline.txt; then \
+		echo "⚙️  Adding isolcpus=3 to /boot/firmware/cmdline.txt..."; \
+		sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.tmp; \
+		sudo sed -i 's/$$/ isolcpus=3/' /boot/firmware/cmdline.txt.tmp; \
+		sudo mv /boot/firmware/cmdline.txt.tmp /boot/firmware/cmdline.txt; \
 		echo "✅ isolcpus=3 added."; \
 		changed=1; \
 	fi; \
