@@ -80,7 +80,7 @@ Once you have all the parts, expand and proceed with the Rasperry Pi Setup below
 - You can use `pwd` to confirm where you are throughout this process
 
 #### Step 3: Update packages and install git
-- `sudo apt update` (get latest packages)
+- `sudo apt update` (get current list of packages)
 - `sudo apt upgrade` (upgrade out of date packages)
 - `sudo apt install git`
 

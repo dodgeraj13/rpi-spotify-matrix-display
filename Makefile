@@ -38,6 +38,43 @@ build-matrix: ## Build rpi-rgb-led-matrix and install its python bindings
 		.venv/bin/pip install rpi-rgb-led-matrix/bindings/python --use-pep517; \
 	fi
 
+optimize: ## Optimize matrix performance
+	@changed=0; \
+	if ! grep -q "isolcpus=3" /boot/cmdline.txt; then \
+		echo "⚙️  Adding isolcpus=3 to /boot/cmdline.txt..."; \
+		cp /boot/cmdline.txt /boot/cmdline.txt.tmp; \
+		sed -i 's/$$/ isolcpus=3/' /boot/cmdline.txt.tmp; \
+		sudo mv /boot/cmdline.txt.tmp /boot/cmdline.txt; \
+		echo "✅ isolcpus=3 added."; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^blacklist snd_bcm2835" /etc/modprobe.d/alsa-blacklist.conf 2>/dev/null; then \
+		echo "⚙️  Blacklisting onboard audio (snd_bcm2835)..."; \
+		echo "blacklist snd_bcm2835" | sudo tee -a /etc/modprobe.d/alsa-blacklist.conf > /dev/null; \
+		echo "✅ snd_bcm2835 blacklisted."; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^dtparam=audio=off" /boot/firmware/config.txt; then \
+		echo "⚙️  Disabling onboard audio in config.txt..."; \
+		sudo sed -i 's/^dtparam=audio=on/dtparam=audio=off/' /boot/firmware/config.txt || true; \
+		if ! grep -q "^dtparam=audio=off" /boot/firmware/config.txt; then \
+			echo "dtparam=audio=off" | sudo tee -a /boot/firmware/config.txt > /dev/null; \
+		fi; \
+		echo "✅ Onboard audio disabled."; \
+		changed=1; \
+	fi; \
+	if [ $$changed -eq 1 ]; then \
+		echo "🔄 Please reboot your Raspberry Pi for changes to take effect."; \
+		echo ""; \
+		read -p "Reboot now? [y/N]: " ans; \
+		if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
+			echo "Rebooting..."; \
+			sudo reboot; \
+		else \
+			echo "Reboot skipped. Remember to reboot manually later."; \
+		fi; \
+	fi
+
 help: ## Show this help message
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -48,8 +85,8 @@ clean: ## Reset repo to a clean state
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 
-run: build-matrix ## Run the display on a raspberry pi connected matrix
-	.venv/bin/python main.py
+run: build-matrix optimize ## Run the display on a raspberry pi connected matrix
+	sudo .venv/bin/python main.py
 
 emulate: ## Run the display within an emulator window
-	.venv/bin/python main.py -e
+	.venv/bin/python main.py --emulate
