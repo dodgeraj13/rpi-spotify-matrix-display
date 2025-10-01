@@ -27,8 +27,9 @@ build-matrix: ## Build rpi-rgb-led-matrix and install its python bindings
 		echo "📦 Installing cython3..."; \
 		sudo apt-get update && sudo apt-get install -y cython3; \
 	fi
-	@if ! ls rpi-rgb-led-matrix/bindings/python/rgbmatrix/_core*.so >/dev/null 2>&1; then \
-		echo "🔨 Building rpi-rgb-led-matrix..."; \
+	@@if [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
+	      [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
+	    echo "🔨 Building rpi-rgb-led-matrix..."; \
 		cd rpi-rgb-led-matrix && \
 			make -C bindings/python/rgbmatrix -B CYTHON=cython3 && \
 			make; \
