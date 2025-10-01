@@ -58,9 +58,9 @@ def main():
     parser = argparse.ArgumentParser(description='Raspberry Pi Spotify Matrix Display')
     parser.add_argument('-e', '--emulate', action='store_true', help='run within an emulator window')
     args = parser.parse_args()
-
+    
     # Suppress Pillow 12 (2025-10-15) deprecation warning
-    warnings.filterwarnings("ignore", category=DeprecationWarning, module="PIL")
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
     
     try:
         config = load_config('config.ini')
