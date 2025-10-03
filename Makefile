@@ -3,15 +3,18 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 clean: ## Reset repo to a clean state
+	echo "🧹 Resetting repo to a clean state..."; \
 	rm -rf build/ dist/ *.egg-info/ .venv/
 	rm -f .cache
 	sudo find . -type d -name __pycache__ -exec rm -rf {} +
 	sudo find . -type f -name "*.pyc" -delete
 	@if [ -d rpi-rgb-led-matrix ]; then \
+		echo ""; \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
 		$(MAKE) -C rpi-rgb-led-matrix clean; \
 	fi
 	@if [ -f /etc/systemd/system/matrix.service ]; then \
+		echo ""; \
 		echo "🗑 Removing matrix systemd service..."; \
 		sudo systemctl stop matrix || true; \
 		sudo systemctl disable matrix || true; \
@@ -19,7 +22,8 @@ clean: ## Reset repo to a clean state
 		sudo systemctl daemon-reload; \
 	fi
 	@if grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
-		echo "🗑 Removing 'matrix' alias from ~/.bash_aliases"; \
+		echo ""; \
+		echo "🗑 Removed 'matrix' alias from ~/.bash_aliases"; \
 		sed "/alias matrix=/d" ~/.bash_aliases > ~/.bash_aliases.tmp && mv ~/.bash_aliases.tmp ~/.bash_aliases; \
 	fi
 
