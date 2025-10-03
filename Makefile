@@ -43,6 +43,7 @@ clean: ## Reset repo to a clean state
 		echo "🗑 Removed 'matrix' alias from ~/.bash_aliases"; \
 		sed "/alias matrix=/d" ~/.bash_aliases > ~/.bash_aliases.tmp && mv ~/.bash_aliases.tmp ~/.bash_aliases; \
 	fi
+	@echo "✅ Repo cleaned."
 
 emulate: ## Run the display within an emulator window
 	.venv/bin/python main.py --emulate
