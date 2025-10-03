@@ -5,8 +5,8 @@ help: ## Show this help message
 clean: ## Reset repo to a clean state
 	rm -rf build/ dist/ *.egg-info/ .venv/
 	rm -f .cache
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+	sudo find . -type d -name __pycache__ -exec rm -rf {} +
+	sudo find . -type f -name "*.pyc" -delete
 	@if [ -d rpi-rgb-led-matrix ]; then \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
 		$(MAKE) -C rpi-rgb-led-matrix clean; \
