@@ -26,8 +26,8 @@ clean: ## Reset repo to a clean state
 	echo "🧹 Resetting repo to a clean state..."; \
 	rm -rf build/ dist/ *.egg-info/ .venv/
 	rm -f .cache
-	sudo find . -type d -name __pycache__ -exec rm -rf {} +
-	sudo find . -type f -name "*.pyc" -delete
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || sudo rm -rf {} +
+	find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || sudo rm -f {} +
 	@if [ -d rpi-rgb-led-matrix ]; then \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
 		$(MAKE) -C rpi-rgb-led-matrix clean; \
