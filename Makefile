@@ -115,10 +115,9 @@ rpi-service: ## Install systemd service from repo and enable it
 		sudo cp /home/pi/rpi-spotify-matrix-display/matrix.service /etc/systemd/system/matrix.service; \
 		echo "🔄 Reloading systemd..."; \
 		sudo systemctl daemon-reload; \
-		echo "✅ Enabling and starting matrix service..."; \
+		echo "✅ Enabling matrix service..."; \
 		sudo systemctl enable matrix; \
-		sudo systemctl start matrix; \
-		echo "🎉 Matrix service installed and running!"; \
+		echo "🎉 Matrix service installed!"; \
 	fi
 	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
 		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
