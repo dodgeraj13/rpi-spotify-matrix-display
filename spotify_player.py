@@ -37,8 +37,8 @@ class SpotifyPlayer:
         # Load font
         try:
             font_paths = [
-                Path("tiny.otf"),  # From project root
-                Path(__file__).parent / "tiny.otf"  # Relative to current file
+                Path("font.otf"),  # From project root
+                Path(__file__).parent / "font.otf"  # Relative to current file
             ]
             
             for font_path in font_paths:
@@ -49,7 +49,7 @@ class SpotifyPlayer:
                 raise FileNotFoundError("Font file not found")
                 
         except (OSError, FileNotFoundError):
-            print("Warning: Could not load font 'tiny.otf', using default")
+            print("Warning: Could not load font 'font.otf', using default")
             self.font = ImageFont.load_default()
         
         # Track state
