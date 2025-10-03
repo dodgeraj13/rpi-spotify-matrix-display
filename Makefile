@@ -90,6 +90,38 @@ clean: ## Reset repo to a clean state
 		$(MAKE) -C rpi-rgb-led-matrix clean; \
 	fi
 
+service: ## Raspberry Pi ONLY - Set up systemd service for auto start at boot
+	@echo "⚙️ Creating systemd service..."
+	@sudo tee /etc/systemd/system/matrix.service > /dev/null <<EOF
+[Unit]
+Description=rpi-spotify-matrix-display
+After=network.target
+
+[Service]
+WorkingDirectory=/home/pi/rpi-spotify-matrix-display
+ExecStart=/home/pi/rpi-spotify-matrix-display/.venv/bin/python3 /home/pi/rpi-spotify-matrix-display/main.py
+
+[Install]
+WantedBy=default.target
+EOF
+
+	@echo "🔄 Reloading systemd..."
+	@sudo systemctl daemon-reload
+
+	@echo "✅ Enabling and starting matrix service..."
+	@sudo systemctl enable matrix
+	@sudo systemctl start matrix
+
+	@echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."
+	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
+		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
+		source ~/.bash_aliases; \
+	fi
+
+	@echo ""
+	@echo "🎉 Matrix service installed and running!"
+	@echo "Use \033[1;36mmatrix start|stop|restart\033[0m to control it."
+
 run: rpi-bindings rpi-optimize ## Run the display on a raspberry pi connected matrix
 	sudo .venv/bin/python main.py
 
