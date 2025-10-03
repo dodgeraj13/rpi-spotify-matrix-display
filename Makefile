@@ -1,3 +1,17 @@
+help: ## Show this help message
+	@echo "Available commands:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+clean: ## Reset repo to a clean state
+	rm -rf build/ dist/ *.egg-info/ .venv/
+	rm -f .cache
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	@if [ -d rpi-rgb-led-matrix ]; then \
+		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
+		$(MAKE) -C rpi-rgb-led-matrix clean; \
+	fi
+
 install: ## Install package dependencies and request Spotify credentials
 	python3 -m venv .venv
 	.venv/bin/pip install -e .
@@ -17,6 +31,14 @@ install: ## Install package dependencies and request Spotify credentials
 	@echo ""
 	@echo "🧮 To run on an pi-connected matrix: \033[1;36mmake run\033[0m"
 	@echo "🖥️ To run within an emulator window: \033[1;36mmake emulate\033[0m"
+
+emulate: ## Run the display within an emulator window
+	.venv/bin/python main.py --emulate
+
+## RASPBERRY PI SPECIFIC TARGETS ##
+
+run: rpi-bindings rpi-optimize rpi-service ## Run the display on a raspberry pi connected matrix
+	sudo .venv/bin/python main.py
 
 rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
 	@if ! dpkg -s python3-dev >/dev/null 2>&1; then \
@@ -76,54 +98,19 @@ rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
 		fi; \
 	fi
 
-help: ## Show this help message
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-clean: ## Reset repo to a clean state
-	rm -rf build/ dist/ *.egg-info/ .venv/
-	rm -f .cache
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
-	@if [ -d rpi-rgb-led-matrix ]; then \
-		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
-		$(MAKE) -C rpi-rgb-led-matrix clean; \
-	fi
-
-service: ## Raspberry Pi ONLY - Set up systemd service for auto start at boot
-	@echo "⚙️ Creating systemd service..."
-	@sudo tee /etc/systemd/system/matrix.service > /dev/null <<EOF
-[Unit]
-Description=rpi-spotify-matrix-display
-After=network.target
-
-[Service]
-WorkingDirectory=/home/pi/rpi-spotify-matrix-display
-ExecStart=/home/pi/rpi-spotify-matrix-display/.venv/bin/python3 /home/pi/rpi-spotify-matrix-display/main.py
-
-[Install]
-WantedBy=default.target
-EOF
-
+rpi-service: ## Install systemd service from repo and enable it
+	@echo "⚙️ Installing systemd service..."
+	@sudo cp /home/pi/rpi-spotify-matrix-display/matrix.service /etc/systemd/system/matrix.service
 	@echo "🔄 Reloading systemd..."
 	@sudo systemctl daemon-reload
-
 	@echo "✅ Enabling and starting matrix service..."
 	@sudo systemctl enable matrix
 	@sudo systemctl start matrix
-
 	@echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."
 	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
 		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
 		source ~/.bash_aliases; \
 	fi
-
 	@echo ""
 	@echo "🎉 Matrix service installed and running!"
-	@echo "Use \033[1;36mmatrix start|stop|restart\033[0m to control it."
-
-run: rpi-bindings rpi-optimize ## Run the display on a raspberry pi connected matrix
-	sudo .venv/bin/python main.py
-
-emulate: ## Run the display within an emulator window
-	.venv/bin/python main.py --emulate
+	@echo "Use matrix start|stop|restart to control it."
