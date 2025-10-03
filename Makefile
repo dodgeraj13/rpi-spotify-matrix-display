@@ -28,10 +28,9 @@ clean: ## Reset repo to a clean state
 	rm -f .cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || sudo rm -rf {} +
 	find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || sudo rm -f {} +
-	@if [ -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] && \
-     [ -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
+	@if [ -d rpi-rgb-led-matrix ]; then \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
-		$(MAKE) -C rpi-rgb-led-matrix clean; \
+		$(MAKE) -C rpi-rgb-led-matrix clean || true; \
 	fi
 	@if [ -f /etc/systemd/system/matrix.service ]; then \
 		echo "🗑 Removing matrix systemd service..."; \
