@@ -11,6 +11,17 @@ clean: ## Reset repo to a clean state
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
 		$(MAKE) -C rpi-rgb-led-matrix clean; \
 	fi
+	@if [ -f /etc/systemd/system/matrix.service ]; then \
+		echo "🗑 Removing matrix systemd service..."; \
+		sudo systemctl stop matrix || true; \
+		sudo systemctl disable matrix || true; \
+		sudo rm /etc/systemd/system/matrix.service; \
+		sudo systemctl daemon-reload; \
+	fi
+	@if grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
+		echo "🗑 Removing 'matrix' alias from ~/.bash_aliases"; \
+		sed "/alias matrix=/d" ~/.bash_aliases > ~/.bash_aliases.tmp && mv ~/.bash_aliases.tmp ~/.bash_aliases; \
+	fi
 
 install: ## Install package dependencies and request Spotify credentials
 	python3 -m venv .venv
@@ -99,18 +110,18 @@ rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
 	fi
 
 rpi-service: ## Install systemd service from repo and enable it
-	@echo "⚙️ Installing systemd service..."
-	@sudo cp /home/pi/rpi-spotify-matrix-display/matrix.service /etc/systemd/system/matrix.service
-	@echo "🔄 Reloading systemd..."
-	@sudo systemctl daemon-reload
-	@echo "✅ Enabling and starting matrix service..."
-	@sudo systemctl enable matrix
-	@sudo systemctl start matrix
-	@echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."
-	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
-		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
-		source ~/.bash_aliases; \
+	@if [ ! -f /etc/systemd/system/matrix.service ]; then \
+		echo "⚙️ Installing systemd service..."; \
+		sudo cp /home/pi/rpi-spotify-matrix-display/matrix.service /etc/systemd/system/matrix.service; \
+		echo "🔄 Reloading systemd..."; \
+		sudo systemctl daemon-reload; \
+		echo "✅ Enabling and starting matrix service..."; \
+		sudo systemctl enable matrix; \
+		sudo systemctl start matrix; \
+		echo "🎉 Matrix service installed and running!"; \
 	fi
-	@echo ""
-	@echo "🎉 Matrix service installed and running!"
-	@echo "Use matrix start|stop|restart to control it."
+	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
+		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
+		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
+		echo "Use matrix start|stop|restart to control it."; \
+	fi
