@@ -8,6 +8,9 @@ version = "2.0.0"
 description = "Raspberry Pi Spotify Matrix Display"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
+authors = [
+    { name = "Kyle Johnson", email = "kyjohnson09@gmail.com" },
+]
 requires-python = ">=3.8"
 dependencies = [
     "Pillow>=11.3.0",
@@ -16,6 +19,9 @@ dependencies = [
     "spotipy>=2.25.1",
     "RGBMatrixEmulator>=0.13.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/kylejohnsonkj/rpi-spotify-matrix-display"
 
 [project.scripts]
 spotify-matrix = "main:main"
