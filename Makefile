@@ -30,7 +30,7 @@ clean: ## Reset repo to a clean state
 	find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || sudo rm -f {} +
 	@if [ -d rpi-rgb-led-matrix ]; then \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
-		-$(MAKE) -C rpi-rgb-led-matrix clean; \
+		$(MAKE) -C rpi-rgb-led-matrix clean || true; \
 	fi
 	@if [ -f /etc/systemd/system/matrix.service ]; then \
 		echo "🗑 Removing matrix systemd service..."; \
