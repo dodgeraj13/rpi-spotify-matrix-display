@@ -18,7 +18,7 @@ install: ## Install package dependencies and request Spotify credentials
 	@echo "🧮 To run on an pi-connected matrix: \033[1;36mmake run\033[0m"
 	@echo "🖥️ To run within an emulator window: \033[1;36mmake emulate\033[0m"
 
-build-matrix: ## Build rpi-rgb-led-matrix and install its python bindings
+rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
 	@if ! dpkg -s python3-dev >/dev/null 2>&1; then \
 		echo "📦 Installing python3-dev..."; \
 		sudo apt-get update && sudo apt-get install -y python3-dev; \
@@ -39,7 +39,7 @@ build-matrix: ## Build rpi-rgb-led-matrix and install its python bindings
 		.venv/bin/pip install rpi-rgb-led-matrix/bindings/python --use-pep517; \
 	fi
 
-optimize: ## Optimize matrix performance
+rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
 	@changed=0; \
 	if ! grep -q "isolcpus=3" /boot/firmware/cmdline.txt; then \
 		echo "⚙️  Adding isolcpus=3 to /boot/firmware/cmdline.txt..."; \
@@ -85,8 +85,12 @@ clean: ## Reset repo to a clean state
 	rm -f .cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+	@if [ -d rpi-rgb-led-matrix ]; then \
+		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
+		$(MAKE) -C rpi-rgb-led-matrix clean; \
+	fi
 
-run: build-matrix optimize ## Run the display on a raspberry pi connected matrix
+run: rpi-bindings rpi-optimize ## Run the display on a raspberry pi connected matrix
 	sudo .venv/bin/python main.py
 
 emulate: ## Run the display within an emulator window
