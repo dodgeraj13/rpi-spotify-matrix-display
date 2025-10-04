@@ -30,7 +30,8 @@ clean: ## Reset repo to a clean state
 	find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || sudo rm -f {} +
 	@if [ -d rpi-rgb-led-matrix ]; then \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
-		$(MAKE) -C rpi-rgb-led-matrix clean || true; \
+		rm -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp; \
+		rm -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp; \
 	fi
 	@if [ -f /etc/systemd/system/matrix.service ]; then \
 		echo "🗑 Removing matrix systemd service..."; \
@@ -125,4 +126,5 @@ rpi-service: ## Install systemd service from repo and enable it
 		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
 		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
 		echo "Use matrix start|stop|restart to control it."; \
+		echo ""; \
 	fi
