@@ -78,7 +78,7 @@ rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
 	fi
 
 rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
-	@read -p "⚠️ This will modify system files (reserves a CPU core for the display and disables onboard audio). Continue? [y/N]: " proceed; \
+	@read -p "⚠️ Would you like to reserve a CPU core for the display and disable onboard audio to optimize performance? [y/N]: " proceed; \
 	if [ "$$proceed" != "y" ] && [ "$$proceed" != "Y" ]; then \
 		echo "⏹ Optimization aborted by user."; \
 		exit 0; \
