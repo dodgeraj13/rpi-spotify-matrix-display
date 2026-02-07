@@ -18,7 +18,7 @@ A Spotify display for 64x64 RGB LED matrices.
 3. Add http://127.0.0.1:8080/callback to Redirect URIs
 4. Save and copy the Client ID and Secret for later
 
-## 🚀 Installation
+## 📦 Installation
 
 ```bash
 git clone --recurse-submodules https://github.com/kylejohnsonkj/rpi-spotify-matrix-display
@@ -28,7 +28,7 @@ cd rpi-spotify-matrix-display
 make
 ```
 
-## ▶️ Running the Display
+## ▶ Running the Display
 
 ```bash
 make run      # Raspberry Pi + matrix display
@@ -91,7 +91,7 @@ Once you have all the parts, proceed with the Rasperry Pi Setup below!
 - `sudo apt upgrade` (upgrade out of date packages)
 - `sudo apt install git`
 
-#### Step 4: Jump back to the [Installation](#installation) instructions above!
+#### Step 4: Jump back to the [Installation](#-installation) instructions above!
 </details>
 
 https://github.com/user-attachments/assets/9bf163f9-8e0f-47cc-b2d2-a62b3a975471
