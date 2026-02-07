@@ -1,12 +1,12 @@
-# rpi-spotify-matrix-display
+# Raspberry Pi Spotify Matrix Display
 
 A Spotify display for 64x64 RGB LED matrices.
 
 - **🎵 Spotify API Integration** – Show off your currently playing track
-- **🖼️ Multiple Modes** – Display album artwork alongside track details or fullscreen
+- **🖼️ Display Modes** – Display album artwork alongside track details or fullscreen
 - **🚗 Scrolling Text** – Auto-scrolling text for long track titles and artist names
 - **⏯️ Playback Indicators** – Play/pause indicator and track progression bar
-- **🖥️ Emulator Support** – Test on your computer before deploying to a Raspberry Pi
+- **🖥️ Emulator Support** – Try it out before building your own display
 
 <br>
 
@@ -24,7 +24,7 @@ A Spotify display for 64x64 RGB LED matrices.
 # 1. Clone the repo
 git clone --recurse-submodules https://github.com/kylejohnsonkj/rpi-spotify-matrix-display
 
-# 2. Enter the repo
+# 2. Enter the directory
 cd rpi-spotify-matrix-display
 
 # 3. Make the project (will request client/secret)
@@ -33,14 +33,18 @@ make
 
 ## How to Run
 ```bash
-# For a Raspberry Pi connected to a matrix
+# For a Raspberry Pi connected to a matrix display
 make run
 
-# Otherwise, emulate using
+# For testing using an emulator
 make emulate
 ```
 
 After running, follow instructions provided in the console. Pasted link should begin with http://127.0.0.1:8080/callback. After successful authorization, play a song and the display will appear!
+
+## Configuration
+
+You can configure Matrix and Spotify settings in `config.ini`. For example, you can change your [hardware mapping](https://github.com/hzeller/rpi-rgb-led-matrix#changing-parameters-via-command-line-flags) (may be required), opt for fullscreen artwork, or set up a device whitelist.
 
 ---
 
@@ -58,10 +62,10 @@ Don't have a Raspberry Pi or RGB matrix yet? No worries! Feel free to mess aroun
 
 I also 3d printed a [matrix stand](https://www.thingiverse.com/thing:3781875) and a [pi mount](https://www.thingiverse.com/thing:2732552) for my [own build](https://imgur.com/a/64x64-album-art-matrix-backside-AjrOa5e).
 
-Once you have all the parts, expand and proceed with the Rasperry Pi Setup below!
+Once you have all the parts, proceed with the Rasperry Pi Setup below!
 
 <details>
-<summary>Raspberry Pi Setup</summary>
+<summary><b>Raspberry Pi Setup</b> (click to expand)</summary>
 
 #### Step 1: Install Pi OS
 - [Download and open the Raspberry Pi Imager](https://www.raspberrypi.com/software/)
@@ -84,12 +88,12 @@ Once you have all the parts, expand and proceed with the Rasperry Pi Setup below
 - `sudo apt upgrade` (upgrade out of date packages)
 - `sudo apt install git`
 
-#### Step 4: Proceed with the Installation instructions above
+#### Step 4: Jump back to the [Installation](#installation) instructions above!
 </details>
 
 ---
 
 ### Acknowledgements
-- allenslab for creating the original [matrix-dashboard](https://www.reddit.com/r/3Dprinting/comments/ujyy4g/i_designed_and_3d_printed_a_led_matrix_dashboard/) code
-- typorter for the [RGBMatrixEmulator](https://github.com/ty-porter/RGBMatrixEmulator) project
-- hzeller for the [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library
+- allenslab for creating the original [matrix-dashboard](https://www.reddit.com/r/3Dprinting/comments/ujyy4g/i_designed_and_3d_printed_a_led_matrix_dashboard/) code and [inspiration](https://www.reddit.com/r/3Dprinting/comments/ujyy4g/i_designed_and_3d_printed_a_led_matrix_dashboard/)
+- typorter for his [RGBMatrixEmulator](https://github.com/ty-porter/RGBMatrixEmulator) project (a lifesaver!)
+- hzeller for the great [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library

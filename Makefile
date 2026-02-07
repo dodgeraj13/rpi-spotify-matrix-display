@@ -4,6 +4,7 @@ help: ## Show this help message
 
 install: ## Install package dependencies and request Spotify credentials
 	python3 -m venv .venv
+	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e .
 	@rm -rf *.egg-info/
 	@if grep -q "client_id = <YOUR_CLIENT_ID_HERE>" config.ini; then \
@@ -23,7 +24,7 @@ install: ## Install package dependencies and request Spotify credentials
 	@echo "🖥️ To run within an emulator window: \033[1;36mmake emulate\033[0m"
 
 clean: ## Reset repo to a clean state
-	echo "🧹 Resetting repo to a clean state..."; \
+	@echo "🧹 Resetting repo to a clean state...";
 	rm -rf build/ dist/ *.egg-info/ .venv/
 	rm -f .cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || sudo rm -rf {} +
@@ -64,7 +65,7 @@ rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
 		echo "📦 Installing cython3..."; \
 		sudo apt-get update && sudo apt-get install -y cython3; \
 	fi
-	@@if [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
+	@if [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
 	      [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
 	    echo "🔨 Building rpi-rgb-led-matrix..."; \
 		cd rpi-rgb-led-matrix && \
@@ -77,7 +78,12 @@ rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
 	fi
 
 rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
-	@changed=0; \
+	@read -p "⚠️ This will modify system files (reserves a CPU core for the display and disables onboard audio). Continue? [y/N]: " proceed; \
+	if [ "$$proceed" != "y" ] && [ "$$proceed" != "Y" ]; then \
+		echo "⏹ Optimization aborted by user."; \
+		exit 0; \
+	fi; \
+	changed=0; \
 	if ! grep -q "isolcpus=3" /boot/firmware/cmdline.txt; then \
 		echo "⚙️  Adding isolcpus=3 to /boot/firmware/cmdline.txt..."; \
 		sudo cp /boot/firmware/cmdline.txt /boot/firmware/cmdline.txt.tmp; \
@@ -126,6 +132,7 @@ rpi-service: ## Install systemd service from repo and enable it
 	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
 		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
 		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
+		source ~/.bash_aliases; \
 		echo "Use matrix start|stop|restart to control it."; \
 		echo ""; \
 	fi
