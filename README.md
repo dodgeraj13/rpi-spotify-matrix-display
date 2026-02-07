@@ -3,49 +3,49 @@
 A Spotify display for 64x64 RGB LED matrices.
 
 - **🎵 Spotify API Integration** – Show off your currently playing track
-- **🖼️ Display Modes** – Display album artwork alongside track details or fullscreen
+- **🖼️ Vibrant Display** – Display album artwork alongside track details or fullscreen
 - **🚗 Scrolling Text** – Auto-scrolling text for long track titles and artist names
 - **⏯️ Playback Indicators** – Play/pause indicator and track progression bar
-- **🖥️ Emulator Support** – Try it out before building your own display
+- **🖥️ Emulator Support** – Try it out before building your own display!
 
 <br>
 
-![emulator screenshot](screenshot.png)
+![emulator screenshot](images/screenshot.png)
 
-## Spotify Setup
+## 🔑 Spotify Setup
 1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 2. Create a new app _(name/description can be anything)_
 3. Add http://127.0.0.1:8080/callback to Redirect URIs
 4. Save and copy the Client ID and Secret for later
 
-## Installation
+## 🚀 Installation
 
 ```bash
-# 1. Clone the repo
 git clone --recurse-submodules https://github.com/kylejohnsonkj/rpi-spotify-matrix-display
 
-# 2. Enter the directory
 cd rpi-spotify-matrix-display
 
-# 3. Make the project (will request client/secret)
 make
 ```
 
-## How to Run
+## ▶️ Running the Display
+
 ```bash
-# For a Raspberry Pi connected to a matrix display
-make run
+make run      # Raspberry Pi + matrix display
+make emulate  # Emulator window (no hardware required)
 
-# For testing using an emulator
-make emulate
-
-# Available commands
-make help
+make help     # List available commands
 ```
 
 After running, follow instructions provided in the console. Pasted link should begin with http://127.0.0.1:8080/callback. After successful authorization, play a song and the display will appear!
 
-## Configuration
+### macOS
+![macos.png](images/macos.png)
+
+### Windows
+![windows.png](images/windows.png)
+
+## 🛠 Configuration
 
 You can configure Matrix and Spotify settings in `config.ini`. For example, you can change your [hardware mapping](https://github.com/hzeller/rpi-rgb-led-matrix#changing-parameters-via-command-line-flags) (may be required), opt for fullscreen artwork, or set up a device whitelist.
 
@@ -93,6 +93,8 @@ Once you have all the parts, proceed with the Rasperry Pi Setup below!
 
 #### Step 4: Jump back to the [Installation](#installation) instructions above!
 </details>
+
+https://github.com/user-attachments/assets/9bf163f9-8e0f-47cc-b2d2-a62b3a975471
 
 ---
 
