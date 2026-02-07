@@ -52,6 +52,7 @@ emulate: ## Run the display within an emulator window
 ## RASPBERRY PI SPECIFIC TARGETS ##
 
 run: rpi-bindings rpi-optimize rpi-service ## Run the display on a raspberry pi connected matrix
+	@echo "▶️ Starting Spotify Matrix Display..."
 	sudo .venv/bin/python main.py
 
 rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings

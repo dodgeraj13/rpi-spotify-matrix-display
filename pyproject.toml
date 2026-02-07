@@ -13,11 +13,12 @@ authors = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "Pillow>=11.3.0",
-    "numpy>=2.3.3",
-    "requests>=2.32.5",
-    "spotipy>=2.25.1",
-    "RGBMatrixEmulator>=0.13.5",
+    "Pillow<12",
+    "urllib3<2",
+    "numpy",
+    "requests",
+    "spotipy",
+    "RGBMatrixEmulator",
 ]
 
 [project.urls]
