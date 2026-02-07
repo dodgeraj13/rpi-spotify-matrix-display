@@ -1,7 +1,3 @@
-help: ## Show this help message
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
 install: ## Install package dependencies and request Spotify credentials
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
@@ -22,6 +18,10 @@ install: ## Install package dependencies and request Spotify credentials
 	@echo ""
 	@echo "🧮 To run on an pi-connected matrix: \033[1;36mmake run\033[0m"
 	@echo "🖥️ To run within an emulator window: \033[1;36mmake emulate\033[0m"
+
+help: ## Show this help message
+	@echo "Available commands:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 clean: ## Reset repo to a clean state
 	@echo "🧹 Resetting repo to a clean state...";

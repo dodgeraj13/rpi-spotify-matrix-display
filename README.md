@@ -38,6 +38,9 @@ make run
 
 # For testing using an emulator
 make emulate
+
+# Available commands
+make help
 ```
 
 After running, follow instructions provided in the console. Pasted link should begin with http://127.0.0.1:8080/callback. After successful authorization, play a song and the display will appear!
