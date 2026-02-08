@@ -94,7 +94,7 @@ Once you have all the parts, proceed with the Rasperry Pi Setup below!
 #### Step 4: Jump back to the [Installation](#-installation) instructions above!
 
 #### Step 5: Optimize performance (optional)
-- You can run `make rpi-optimize` to try to improve the performance of your display. This will [reserve a CPU core for the display](https://github.com/hzeller/rpi-rgb-led-matrix/issues/100#issuecomment-1044069554) and [disable onboard audio](https://github.com/hzeller/rpi-rgb-led-matrix/issues/100#issuecomment-1044069554).
+- You can run `make rpi-optimize` to try to improve the performance of your display. This will [reserve a CPU core for the display](https://github.com/hzeller/rpi-rgb-led-matrix?tab=readme-ov-file#cpu-use) and [disable onboard audio](https://github.com/hzeller/rpi-rgb-led-matrix?tab=readme-ov-file#troubleshooting).
 </details>
 
 https://github.com/user-attachments/assets/9bf163f9-8e0f-47cc-b2d2-a62b3a975471
