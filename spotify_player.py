@@ -28,6 +28,7 @@ class SpotifyPlayer:
     SCROLL_DELAY = 4
     PAUSED_DELAY = 5
     FETCH_INTERVAL = 1
+    SLIDE_ANIMATION_FRAMES = 10  # Number of frames for slide animation
     
 
     def __init__(self, config, spotify_module: SpotifyModule):
@@ -57,6 +58,18 @@ class SpotifyPlayer:
         self.current_art_img: Optional[Image.Image] = None
         self.current_title = ''
         self.current_artist = ''
+        self.current_track_id: Optional[str] = None
+        
+        # Queue history for detecting next/previous
+        self.track_queue_history = []  # List of track_ids in order
+        self.max_queue_history = 10  # Keep last 10 tracks
+        
+        # Slide animation state
+        self.slide_animation_active = False
+        self.slide_animation_frame = 0
+        self.slide_direction = 1  # 1 for left (next), -1 for right (previous)
+        self.previous_frame: Optional[Image.Image] = None
+        self.next_frame: Optional[Image.Image] = None
         
         # Animation state
         self.title_animation_cnt = 0
@@ -117,6 +130,11 @@ class SpotifyPlayer:
         progress_ms = response.progress_ms
         duration_ms = response.duration_ms
         lyrics = response.lyrics
+        track_id = response.track_id
+        
+        # Check for track change and determine direction
+        if track_id and track_id != self.current_track_id:
+            self._handle_track_change(track_id)
         
         # Update last active time if playing
         if is_playing:
@@ -125,6 +143,15 @@ class SpotifyPlayer:
         # Check if we should show black screen due to inactivity
         if current_time - self.last_active_time >= self.shutdown_delay:
             return self.black_screen
+        
+        # Handle slide animation
+        if self.slide_animation_active:
+            frame = self._generate_slide_animation_frame(
+                artist, title, art_url, is_playing, progress_ms, duration_ms, lyrics
+            )
+            if frame is not None:
+                return frame
+            # Animation complete, continue with normal frame generation
         
         if self.always_fullscreen:
             return self._generate_fullscreen_frame(art_url, is_playing)
@@ -146,6 +173,145 @@ class SpotifyPlayer:
         
         return frame
 
+
+    def _generate_slide_animation_frame(self, artist: str, title: str, art_url: str,
+                                       is_playing: bool, progress_ms: int, duration_ms: int,
+                                       lyrics: Optional[dict] = None) -> Optional[Image.Image]:
+        """Generate slide animation frame during track transition."""
+        if not self.slide_animation_active:
+            return None
+        
+        # Generate new frame with updated track info
+        # Temporarily update track info for frame generation
+        temp_artist = self.current_artist
+        temp_title = self.current_title
+        temp_art_url = self.current_art_url
+        temp_art_img = self.current_art_img
+        
+        # Fetch new album art if needed (without updating state)
+        new_art_img = None
+        if art_url:
+            if not is_playing:
+                # Fullscreen size for paused
+                new_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+            else:
+                # Compact size for playing
+                new_art_img = self._fetch_and_resize_image(art_url, 48, 48)
+        
+        self.current_artist = artist
+        self.current_title = title
+        self.current_art_url = art_url
+        self.current_art_img = new_art_img if new_art_img else temp_art_img
+        self._update_playback_state(is_playing)
+        
+        # Generate new frame
+        new_frame = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
+        draw = ImageDraw.Draw(new_frame)
+        
+        # Show fullscreen when paused (after pause delay)
+        current_time = math.floor(time.time())
+        show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
+        
+        if show_fullscreen and self.current_art_img and art_url:
+            if self.current_art_img.size == (48, 48):
+                self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+            new_frame.paste(self.current_art_img, (0, 0))
+        else:
+            # Show compact view
+            if self.current_art_img and self.current_art_img.size == (48, 48):
+                new_frame.paste(self.current_art_img, (8, 14))
+            
+            # Draw track title and artist text (without updating animation state)
+            text_length = self.CANVAS_WIDTH - 12
+            x_offset = 1
+            spacer = "     "
+            
+            title = title or "Unknown Title"
+            artist = artist or "Unknown Artist"
+            
+            # Draw title (static, no scrolling during animation)
+            title_len = self.font.getlength(title)
+            if title_len > text_length:
+                draw.text((x_offset, 1), title[:20] + "...", self.TITLE_COLOR, font=self.font)
+            else:
+                draw.text((x_offset, 1), title, self.TITLE_COLOR, font=self.font)
+            
+            # Draw artist (static, no scrolling during animation)
+            artist_len = self.font.getlength(artist)
+            if artist_len > text_length:
+                draw.text((x_offset, 7), artist[:20] + "...", self.ARTIST_COLOR, font=self.font)
+            else:
+                draw.text((x_offset, 7), artist, self.ARTIST_COLOR, font=self.font)
+            
+            # Clear text areas
+            draw.rectangle((0, 0, 0, 12), fill=(0, 0, 0))
+            draw.rectangle((52, 0, 63, 12), fill=(0, 0, 0))
+
+            # Draw lyrics if available and playing
+            if is_playing and lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
+                self._draw_lyrics(new_frame, draw, lyrics, progress_ms)
+            
+            # Draw play/pause indicator for the new frame (sliding in)
+            # Don't draw progress bar - it will be drawn statically on top
+            self._draw_play_pause_indicator(draw, is_playing)
+        
+        # Restore previous state
+        self.current_artist = temp_artist
+        self.current_title = temp_title
+        self.current_art_url = temp_art_url
+        self.current_art_img = temp_art_img
+        
+        # Calculate slide progress (0.0 to 1.0)
+        progress = self.slide_animation_frame / self.SLIDE_ANIMATION_FRAMES
+        
+        # Create composite frame
+        composite = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
+        
+        if self.previous_frame:
+            # Hide progress bar and play/pause indicator on previous frame
+            prev_frame_modified = self.previous_frame.copy()
+            prev_draw = ImageDraw.Draw(prev_frame_modified)
+            # Cover progress bar at bottom (line 63)
+            prev_draw.rectangle((0, 62, 63, 63), fill=(0, 0, 0))
+            # Cover play/pause indicator (around 55, 3 to 59, 9)
+            prev_draw.rectangle((54, 2, 63, 10), fill=(0, 0, 0))
+            
+            # Calculate offsets based on direction
+            # For left slide (next): previous moves left, new comes from right
+            # For right slide (previous): previous moves right, new comes from left
+            if self.slide_direction == 1:  # Left (next)
+                prev_offset = int(-self.CANVAS_WIDTH * progress)
+                new_offset = int(self.CANVAS_WIDTH * (1 - progress))
+            else:  # Right (previous)
+                prev_offset = int(self.CANVAS_WIDTH * progress)
+                new_offset = int(-self.CANVAS_WIDTH * (1 - progress))
+            
+            # Draw previous frame (with hidden progress bar and play/pause)
+            composite.paste(prev_frame_modified, (prev_offset, 0))
+            # Draw new frame (with play/pause visible, but no progress bar)
+            composite.paste(new_frame, (new_offset, 0))
+        else:
+            # No previous frame (first track or fullscreen), just show new frame
+            composite.paste(new_frame, (0, 0))
+        
+        # Draw static progress bar on top (doesn't transition)
+        composite_draw = ImageDraw.Draw(composite)
+        self._draw_progress_bar(composite_draw, progress_ms, duration_ms)
+        
+        # Update animation frame
+        self.slide_animation_frame += 1
+        
+        # Check if animation is complete
+        if self.slide_animation_frame >= self.SLIDE_ANIMATION_FRAMES:
+            self.slide_animation_active = False
+            self.slide_animation_frame = 0
+            self.previous_frame = None
+            self.next_frame = None
+            # Now update the actual track info
+            self._update_track_info(artist, title)
+            self._update_album_art(art_url, is_playing)
+        
+        return composite
 
     def _generate_now_playing_frame(self, artist: str, title: str, art_url: str, 
                            is_playing: bool, progress_ms: int, duration_ms: int, lyrics: Optional[dict] = None) -> Image.Image:
@@ -174,8 +340,8 @@ class SpotifyPlayer:
         # Draw track title and artist text
         self._draw_scrolling_text(draw, title, artist)
 
-        # Draw lyrics if available
-        if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
+        # Draw lyrics if available and playing
+        if is_playing and lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
             self._draw_lyrics(frame, draw, lyrics, progress_ms)
         
         # Draw progress bar
@@ -213,6 +379,57 @@ class SpotifyPlayer:
         self.is_playing = is_playing
 
 
+    def _handle_track_change(self, new_track_id: str):
+        """Handle track change and determine slide direction."""
+        if not new_track_id:
+            return
+        
+        # Capture current frame as previous before any updates
+        if not self.always_fullscreen and (self.current_title or self.current_artist):
+            # Generate frame with current state
+            self.previous_frame = self._generate_now_playing_frame(
+                self.current_artist, self.current_title, self.current_art_url,
+                self.is_playing, 0, 0, None
+            )
+        
+        # Determine direction based on queue history
+        slide_direction = 1  # Default to left (next)
+        
+        if self.current_track_id and new_track_id in self.track_queue_history:
+            # Track is in history - check position
+            current_index = -1
+            new_index = -1
+            
+            for i, tid in enumerate(self.track_queue_history):
+                if tid == self.current_track_id:
+                    current_index = i
+                if tid == new_track_id:
+                    new_index = i
+            
+            # If new track is before current in history, it's previous (right)
+            if new_index < current_index and new_index >= 0:
+                slide_direction = -1  # Right (previous)
+        
+        # Start slide animation
+        self.slide_animation_active = True
+        self.slide_animation_frame = 0
+        self.slide_direction = slide_direction
+        
+        # Update track ID (but don't update other track info yet - that happens after animation)
+        self.current_track_id = new_track_id
+        
+        # Update queue history
+        if new_track_id not in self.track_queue_history:
+            self.track_queue_history.append(new_track_id)
+        else:
+            # Move to end if already in history
+            self.track_queue_history.remove(new_track_id)
+            self.track_queue_history.append(new_track_id)
+        
+        # Limit history size
+        if len(self.track_queue_history) > self.max_queue_history:
+            self.track_queue_history = self.track_queue_history[-self.max_queue_history:]
+    
     def _update_track_info(self, artist: str, title: str):
         """Update track information and reset animations if needed."""
         if self.current_title != title or self.current_artist != artist:

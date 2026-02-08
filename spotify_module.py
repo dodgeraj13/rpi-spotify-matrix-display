@@ -32,6 +32,7 @@ class PlaybackInfo:
     progress_ms: int
     duration_ms: int
     lyrics: Optional[dict] = None
+    track_id: Optional[str] = None
 
 
 class SpotifyModule:
@@ -180,7 +181,8 @@ class SpotifyModule:
                 is_playing=track['is_playing'],
                 progress_ms=track.get('progress_ms', 0),
                 duration_ms=0,
-                lyrics=None
+                lyrics=None,
+                track_id=None
             )
         
         artist = self._format_artist_names(track['item']['artists'])
@@ -209,7 +211,8 @@ class SpotifyModule:
             is_playing=track['is_playing'],
             progress_ms=track.get('progress_ms', 0),
             duration_ms=track['item'].get('duration_ms', 0),
-            lyrics=lyrics
+            lyrics=lyrics,
+            track_id=track_id
         )
     
     def _format_artist_names(self, artists):
