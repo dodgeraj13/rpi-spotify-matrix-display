@@ -11,6 +11,7 @@ from typing import Optional
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
+from syrics.api import Spotify as SyricsSpotify
 
 @dataclass
 class SpotifyConfig:
@@ -18,6 +19,7 @@ class SpotifyConfig:
     client_id: str
     client_secret: str
     redirect_uri: str
+    sp_dc: Optional[str] = None
 
 
 @dataclass
@@ -29,6 +31,7 @@ class PlaybackInfo:
     is_playing: bool
     progress_ms: int
     duration_ms: int
+    lyrics: Optional[dict] = None
 
 
 class SpotifyModule:
@@ -42,13 +45,19 @@ class SpotifyModule:
         self.spotify: Optional[spotipy.Spotify] = None
         self.auth_manager: Optional[SpotifyOAuth] = None
         self.is_playing = False
+
+        self.spl: Optional[SyricsSpotify] = None
+        self.last_track_id: Optional[str] = None
+        self.last_lyrics: Optional[str] = None
         
-        self._setup_spotify()
+        spotify_config = self._get_spotify_config()
+
+        self._setup_spotify(spotify_config)
+        self._setup_syrics(spotify_config)
     
-    def _setup_spotify(self):
+    def _setup_spotify(self, spotify_config: SpotifyConfig):
         """Setup Spotify authentication and client."""
         try:
-            spotify_config = self._get_spotify_config()
             if not spotify_config:
                 self.invalid = True
                 return
@@ -71,6 +80,18 @@ class SpotifyModule:
             print(f"Error setting up Spotify module: {e}")
             self.invalid = True
     
+    def _setup_syrics(self, spotify_config: SpotifyConfig):
+        """Setup SyricsSpotify for lyrics fetching."""
+        if spotify_config.sp_dc:
+            try:
+                self.spl = SyricsSpotify(spotify_config.sp_dc)
+            except Exception as e:
+                print(f"Warning: Could not initialize SyricsSpotify: {e}")
+                self.spl = None
+        else:
+            print("Warning: sp_dc not provided, lyrics fetching will be disabled")
+            self.spl = None
+        
     def _get_spotify_config(self) -> Optional[SpotifyConfig]:
         """Extract Spotify configuration from config parser."""
         if not self.config or 'Spotify' not in self.config:
@@ -93,7 +114,8 @@ class SpotifyModule:
         return SpotifyConfig(
             client_id=spotify_section['client_id'],
             client_secret=spotify_section['client_secret'],
-            redirect_uri=spotify_section['redirect_uri']
+            redirect_uri=spotify_section['redirect_uri'],
+            sp_dc=spotify_section.get('sp_dc')
         )
     
     def is_device_whitelisted(self) -> bool:
@@ -157,12 +179,28 @@ class SpotifyModule:
                 art_url=None,
                 is_playing=track['is_playing'],
                 progress_ms=track.get('progress_ms', 0),
-                duration_ms=0
+                duration_ms=0,
+                lyrics=None
             )
         
         artist = self._format_artist_names(track['item']['artists'])
         title = track['item']['name']
         art_url = self._get_album_art_url(track['item']['album'])
+        
+        track_id = track['item']['id'] if track['item'] else None
+        lyrics = None
+        
+        # Fetch lyrics if we have a SyricsSpotify instance and a new track
+        if self.spl and track_id:
+            if track_id != self.last_track_id:
+                try:
+                    self.last_lyrics = self.spl.get_lyrics(track_id)
+                    self.last_track_id = track_id
+                except Exception as e:
+                    print(f"Error fetching lyrics for track {track_id}: {e}")
+                    self.last_lyrics = None
+                    self.last_track_id = track_id
+            lyrics = self.last_lyrics
         
         return PlaybackInfo(
             artist=artist,
@@ -170,7 +208,8 @@ class SpotifyModule:
             art_url=art_url,
             is_playing=track['is_playing'],
             progress_ms=track.get('progress_ms', 0),
-            duration_ms=track['item'].get('duration_ms', 0)
+            duration_ms=track['item'].get('duration_ms', 0),
+            lyrics=lyrics
         )
     
     def _format_artist_names(self, artists):

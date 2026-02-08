@@ -116,6 +116,7 @@ class SpotifyPlayer:
         is_playing = response.is_playing
         progress_ms = response.progress_ms
         duration_ms = response.duration_ms
+        lyrics = response.lyrics
         
         # Update last active time if playing
         if is_playing:
@@ -129,7 +130,7 @@ class SpotifyPlayer:
             return self._generate_fullscreen_frame(art_url, is_playing)
         else:
             return self._generate_now_playing_frame(
-                artist, title, art_url, is_playing, progress_ms, duration_ms
+                artist, title, art_url, is_playing, progress_ms, duration_ms, lyrics
             )
     
 
@@ -147,7 +148,7 @@ class SpotifyPlayer:
 
 
     def _generate_now_playing_frame(self, artist: str, title: str, art_url: str, 
-                           is_playing: bool, progress_ms: int, duration_ms: int) -> Image.Image:
+                           is_playing: bool, progress_ms: int, duration_ms: int, lyrics: Optional[dict] = None) -> Image.Image:
         """Generate now playing display frame with album art and text."""
         self._update_playback_state(is_playing)
         self._update_track_info(artist, title)
@@ -170,8 +171,12 @@ class SpotifyPlayer:
         if self.current_art_img and self.current_art_img.size == (48, 48):
             frame.paste(self.current_art_img, (8, 14))
         
-        # Draw text overlays
+        # Draw track title and artist text
         self._draw_scrolling_text(draw, title, artist)
+
+        # Draw lyrics if available
+        if lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
+            self._draw_lyrics(frame, draw, lyrics, progress_ms)
         
         # Draw progress bar
         self._draw_progress_bar(draw, progress_ms, duration_ms)
@@ -246,6 +251,71 @@ class SpotifyPlayer:
             print(f"Error fetching image {url}: {e}")
             return None
 
+
+    def _draw_lyrics(self, frame: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int):
+        """Draw synchronized lyrics on the display."""
+        lyric_lines = lyrics['lyrics']['lines']
+        current_time_ms = int(progress_ms)
+
+        # Find the latest lyric line up to current time
+        current_line = None
+        for line in lyric_lines:
+            if int(line['startTimeMs']) <= current_time_ms:
+                text = line['words'].strip()
+                if text:
+                    current_line = text
+            else:
+                break
+
+        if current_line:
+            text_length = self.CANVAS_WIDTH - 6  # max width for wrapped text
+            words = current_line.split()
+            lines = []
+            current = ""
+
+            max_lines = 7
+            broke_early = False
+
+            for i, word in enumerate(words):
+                test = f"{current} {word}".strip()
+                if self.font.getlength(test) <= text_length:
+                    current = test
+                else:
+                    lines.append(current)
+                    current = word
+                    if len(lines) == max_lines - 1:
+                        # We have filled 6 lines, next is 7th
+                        # If we still have words remaining, break early
+                        if i < len(words) - 1:
+                            broke_early = True
+                        break
+
+            # Append the last line (7th)
+            if len(lines) < max_lines - 1:
+                # fewer than 6 lines so just append current
+                lines.append(current)
+            else:
+                # 7th line, truncate if broke_early (more text exists)
+                if broke_early:
+                    ellipsis = ".."
+                    while self.font.getlength(current + ellipsis) > text_length and current:
+                        current = current.rsplit(" ", 1)[0]
+                    current = (current + ellipsis).strip()
+                lines.append(current)
+
+            # Center vertically in 48x48 box starting at y=14
+            line_height = 6  # adjust if needed based on your font
+            total_height = len(lines) * line_height
+            y_start = 14 + (48 - total_height) // 2
+
+            overlay = Image.new("RGBA", (64, 48), (0, 0, 0, 120))  # semi-transparent black
+            frame.paste(overlay, (0, 14), overlay)
+
+            for i, line in enumerate(lines):
+                text_width = self.font.getlength(line)
+                x = (self.CANVAS_WIDTH - text_width) // 2
+                y = y_start + i * line_height
+                draw.text((x, y), line, fill=self.TITLE_COLOR, font=self.font)
 
     def _draw_scrolling_text(self, draw: ImageDraw.Draw, title: str, artist: str):
         """Draw scrolling text for title and artist."""
