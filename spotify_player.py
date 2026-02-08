@@ -28,7 +28,7 @@ class SpotifyPlayer:
     SCROLL_DELAY = 4
     PAUSED_DELAY = 5
     FETCH_INTERVAL = 1
-    SLIDE_ANIMATION_FRAMES = 10  # Number of frames for slide animation
+    SLIDE_ANIMATION_FRAMES = 17  # Number of frames for slide animation
     
 
     def __init__(self, config, spotify_module: SpotifyModule):
@@ -69,7 +69,10 @@ class SpotifyPlayer:
         self.slide_animation_frame = 0
         self.slide_direction = 1  # 1 for left (next), -1 for right (previous)
         self.previous_frame: Optional[Image.Image] = None
+        self.previous_frame_modified: Optional[Image.Image] = None  # Cached modified previous frame
         self.next_frame: Optional[Image.Image] = None
+        self.next_track_art_img: Optional[Image.Image] = None  # Cached art for next track
+        self.next_track_art_url: Optional[str] = None
         
         # Animation state
         self.title_animation_cnt = 0
@@ -188,15 +191,17 @@ class SpotifyPlayer:
         temp_art_url = self.current_art_url
         temp_art_img = self.current_art_img
         
-        # Fetch new album art if needed (without updating state)
-        new_art_img = None
-        if art_url:
+        # Fetch new album art once (cache it for subsequent frames)
+        if art_url != self.next_track_art_url or self.next_track_art_img is None:
             if not is_playing:
                 # Fullscreen size for paused
-                new_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                self.next_track_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
             else:
                 # Compact size for playing
-                new_art_img = self._fetch_and_resize_image(art_url, 48, 48)
+                self.next_track_art_img = self._fetch_and_resize_image(art_url, 48, 48)
+            self.next_track_art_url = art_url
+        
+        new_art_img = self.next_track_art_img
         
         self.current_artist = artist
         self.current_title = title
@@ -267,15 +272,7 @@ class SpotifyPlayer:
         # Create composite frame
         composite = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
         
-        if self.previous_frame:
-            # Hide progress bar and play/pause indicator on previous frame
-            prev_frame_modified = self.previous_frame.copy()
-            prev_draw = ImageDraw.Draw(prev_frame_modified)
-            # Cover progress bar at bottom (line 63)
-            prev_draw.rectangle((0, 62, 63, 63), fill=(0, 0, 0))
-            # Cover play/pause indicator (around 55, 3 to 59, 9)
-            prev_draw.rectangle((54, 2, 63, 10), fill=(0, 0, 0))
-            
+        if self.previous_frame_modified:
             # Calculate offsets based on direction
             # For left slide (next): previous moves left, new comes from right
             # For right slide (previous): previous moves right, new comes from left
@@ -286,8 +283,8 @@ class SpotifyPlayer:
                 prev_offset = int(self.CANVAS_WIDTH * progress)
                 new_offset = int(-self.CANVAS_WIDTH * (1 - progress))
             
-            # Draw previous frame (with hidden progress bar and play/pause)
-            composite.paste(prev_frame_modified, (prev_offset, 0))
+            # Draw previous frame (with hidden progress bar and play/pause) - use cached version
+            composite.paste(self.previous_frame_modified, (prev_offset, 0))
             # Draw new frame (with play/pause visible, but no progress bar)
             composite.paste(new_frame, (new_offset, 0))
         else:
@@ -306,7 +303,10 @@ class SpotifyPlayer:
             self.slide_animation_active = False
             self.slide_animation_frame = 0
             self.previous_frame = None
+            self.previous_frame_modified = None
             self.next_frame = None
+            self.next_track_art_img = None
+            self.next_track_art_url = None
             # Now update the actual track info
             self._update_track_info(artist, title)
             self._update_album_art(art_url, is_playing)
@@ -391,6 +391,15 @@ class SpotifyPlayer:
                 self.current_artist, self.current_title, self.current_art_url,
                 self.is_playing, 0, 0, None
             )
+            # Pre-modify previous frame (hide progress bar and play/pause) and cache it
+            self.previous_frame_modified = self.previous_frame.copy()
+            prev_draw = ImageDraw.Draw(self.previous_frame_modified)
+            # Cover progress bar at bottom (line 63)
+            prev_draw.rectangle((0, 62, 63, 63), fill=(0, 0, 0))
+            # Cover play/pause indicator (around 55, 3 to 59, 9)
+            prev_draw.rectangle((54, 2, 63, 10), fill=(0, 0, 0))
+        else:
+            self.previous_frame_modified = None
         
         # Determine direction based on queue history
         slide_direction = 1  # Default to left (next)
@@ -414,6 +423,10 @@ class SpotifyPlayer:
         self.slide_animation_active = True
         self.slide_animation_frame = 0
         self.slide_direction = slide_direction
+        
+        # Clear cached next track art (will be fetched when animation starts)
+        self.next_track_art_img = None
+        self.next_track_art_url = None
         
         # Update track ID (but don't update other track info yet - that happens after animation)
         self.current_track_id = new_track_id
