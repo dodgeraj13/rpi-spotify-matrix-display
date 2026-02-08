@@ -59,6 +59,7 @@ class SpotifyPlayer:
         self.current_title = ''
         self.current_artist = ''
         self.current_track_id: Optional[str] = None
+        self.current_prominent_color = self.PLAY_COLOR  # Default to green if no art
         
         # Queue history for detecting next/previous
         self.track_queue_history = []  # List of track_ids in order
@@ -190,9 +191,10 @@ class SpotifyPlayer:
         temp_title = self.current_title
         temp_art_url = self.current_art_url
         temp_art_img = self.current_art_img
+        temp_prominent_color = self.current_prominent_color
         
         # Fetch new album art once (cache it for subsequent frames)
-        if art_url != self.next_track_art_url or self.next_track_art_img is None:
+        if art_url and (art_url != self.next_track_art_url or self.next_track_art_img is None):
             if not is_playing:
                 # Fullscreen size for paused
                 self.next_track_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
@@ -200,6 +202,9 @@ class SpotifyPlayer:
                 # Compact size for playing
                 self.next_track_art_img = self._fetch_and_resize_image(art_url, 48, 48)
             self.next_track_art_url = art_url
+        elif not art_url:
+            # No art URL, use default color
+            self.current_prominent_color = self.PLAY_COLOR
         
         new_art_img = self.next_track_art_img
         
@@ -265,6 +270,8 @@ class SpotifyPlayer:
         self.current_title = temp_title
         self.current_art_url = temp_art_url
         self.current_art_img = temp_art_img
+        # Keep the new prominent color for the progress bar (drawn on composite)
+        # Don't restore temp_prominent_color - we want the new track's color
         
         # Calculate slide progress (0.0 to 1.0)
         progress = self.slide_animation_frame / self.SLIDE_ANIMATION_FRAMES
@@ -454,6 +461,7 @@ class SpotifyPlayer:
     def _update_album_art(self, art_url: str, is_playing: bool):
         """Update album art based on playback state."""
         if not art_url:
+            self.current_prominent_color = self.PLAY_COLOR
             return
             
         current_time = math.floor(time.time())
@@ -470,13 +478,194 @@ class SpotifyPlayer:
                 self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
     
 
+    def _is_gray_or_white(self, r: int, g: int, b: int) -> bool:
+        """Check if a color is gray or white."""
+        # Calculate the difference between max and min RGB values
+        max_val = max(r, g, b)
+        min_val = min(r, g, b)
+        diff = max_val - min_val
+        
+        # Gray/white colors have low difference between RGB components
+        # Threshold: if difference is less than 30, it's likely gray/white
+        return diff < 30
+
+    def _is_too_dark(self, r: int, g: int, b: int, threshold: int = 120) -> bool:
+        """Check if a color is too dark (brightness below threshold)."""
+        brightness = max(r, g, b)
+        return brightness < threshold
+
+    def _colors_similar_hue(self, r1: int, g1: int, b1: int, r2: int, g2: int, b2: int, threshold: float = 0.15) -> bool:
+        """Check if two colors have similar hue (color family)."""
+        # Normalize colors to compare hue ratios
+        # Avoid division by zero
+        max1 = max(r1, g1, b1) or 1
+        max2 = max(r2, g2, b2) or 1
+        
+        # Calculate normalized RGB ratios
+        ratios1 = (r1 / max1, g1 / max1, b1 / max1)
+        ratios2 = (r2 / max2, g2 / max2, b2 / max2)
+        
+        # Check if ratios are similar (within threshold)
+        diff = sum(abs(a - b) for a, b in zip(ratios1, ratios2))
+        return diff < threshold
+
+    def _is_vibrant_bright(self, r: int, g: int, b: int) -> bool:
+        """Check if a color is vibrant and bright."""
+        # First check if it's gray or white - exclude those
+        if self._is_gray_or_white(r, g, b):
+            return False
+        
+        # Calculate brightness (0-255)
+        brightness = max(r, g, b)
+        
+        # Calculate saturation (0.0-1.0)
+        max_val = max(r, g, b)
+        min_val = min(r, g, b)
+        if max_val == 0:
+            saturation = 0.0
+        else:
+            saturation = (max_val - min_val) / max_val
+        
+        # Require high saturation (>0.3) and good brightness (>100)
+        return saturation > 0.3 and brightness > 100
+
+    def _extract_prominent_color(self, img: Image.Image) -> tuple:
+        """Extract the most prominent vibrant and bright color from an image."""
+        try:
+            # Resize to small size for faster processing
+            small_img = img.resize((16, 16), resample=Image.LANCZOS)
+            
+            # Convert to RGB if needed
+            if small_img.mode != 'RGB':
+                small_img = small_img.convert('RGB')
+            
+            # Get all pixels
+            pixels = list(small_img.getdata())
+            
+            # Filter to only vibrant, bright colors and count frequencies
+            vibrant_color_counts = {}
+            for r, g, b in pixels:
+                if self._is_vibrant_bright(r, g, b):
+                    # Quantize to reduce similar colors (round to nearest 16)
+                    r_q = (r // 16) * 16
+                    g_q = (g // 16) * 16
+                    b_q = (b // 16) * 16
+                    color = (r_q, g_q, b_q)
+                    vibrant_color_counts[color] = vibrant_color_counts.get(color, 0) + 1
+            
+            # Find the most common vibrant color
+            if vibrant_color_counts:
+                most_common = max(vibrant_color_counts.items(), key=lambda x: x[1])[0]
+                # Get average of original vibrant colors that match this quantized color
+                matching_colors = [(r, g, b) for r, g, b in pixels 
+                                 if self._is_vibrant_bright(r, g, b) and
+                                 ((r // 16) * 16, (g // 16) * 16, (b // 16) * 16) == most_common]
+                if matching_colors:
+                    base_r = sum(c[0] for c in matching_colors) // len(matching_colors)
+                    base_g = sum(c[1] for c in matching_colors) // len(matching_colors)
+                    base_b = sum(c[2] for c in matching_colors) // len(matching_colors)
+                    
+                    # Safety check: ensure base color is not gray/white
+                    if self._is_gray_or_white(base_r, base_g, base_b):
+                        return self.PLAY_COLOR
+                    
+                    # Look for lighter variations of this color in the artwork
+                    lighter_variations = []
+                    for r, g, b in pixels:
+                        if (self._is_vibrant_bright(r, g, b) and 
+                            self._colors_similar_hue(base_r, base_g, base_b, r, g, b)):
+                            brightness_base = max(base_r, base_g, base_b)
+                            brightness_candidate = max(r, g, b)
+                            # Prefer lighter versions (higher brightness)
+                            if brightness_candidate > brightness_base:
+                                lighter_variations.append((r, g, b, brightness_candidate))
+                    
+                    # If we found lighter variations, use the lightest one
+                    if lighter_variations:
+                        # Sort by brightness (descending) and take the lightest
+                        lighter_variations.sort(key=lambda x: x[3], reverse=True)
+                        best_r, best_g, best_b, _ = lighter_variations[0]
+                        # Check if the color is too dark
+                        if self._is_too_dark(best_r, best_g, best_b):
+                            return self.PLAY_COLOR
+                        return (best_r, best_g, best_b)
+                    
+                    # Otherwise use the base color, but check if it's too dark
+                    if self._is_too_dark(base_r, base_g, base_b):
+                        return self.PLAY_COLOR
+                    return (base_r, base_g, base_b)
+            
+            # If no vibrant colors found, try to find any bright color (but not gray/white)
+            bright_color_counts = {}
+            for r, g, b in pixels:
+                brightness = max(r, g, b)
+                if brightness > 120 and not self._is_gray_or_white(r, g, b):  # At least somewhat bright and not gray/white
+                    r_q = (r // 16) * 16
+                    g_q = (g // 16) * 16
+                    b_q = (b // 16) * 16
+                    color = (r_q, g_q, b_q)
+                    bright_color_counts[color] = bright_color_counts.get(color, 0) + 1
+            
+            if bright_color_counts:
+                most_common = max(bright_color_counts.items(), key=lambda x: x[1])[0]
+                matching_colors = [(r, g, b) for r, g, b in pixels 
+                                 if max(r, g, b) > 120 and not self._is_gray_or_white(r, g, b) and
+                                 ((r // 16) * 16, (g // 16) * 16, (b // 16) * 16) == most_common]
+                if matching_colors:
+                    base_r = sum(c[0] for c in matching_colors) // len(matching_colors)
+                    base_g = sum(c[1] for c in matching_colors) // len(matching_colors)
+                    base_b = sum(c[2] for c in matching_colors) // len(matching_colors)
+                    
+                    # Check if the base color is gray or white
+                    if self._is_gray_or_white(base_r, base_g, base_b):
+                        return self.PLAY_COLOR
+                    
+                    # Look for lighter variations of this color in the artwork
+                    lighter_variations = []
+                    for r, g, b in pixels:
+                        brightness = max(r, g, b)
+                        if (brightness > 120 and not self._is_gray_or_white(r, g, b) and
+                            self._colors_similar_hue(base_r, base_g, base_b, r, g, b)):
+                            brightness_base = max(base_r, base_g, base_b)
+                            # Prefer lighter versions (higher brightness)
+                            if brightness > brightness_base:
+                                lighter_variations.append((r, g, b, brightness))
+                    
+                    # If we found lighter variations, use the lightest one
+                    if lighter_variations:
+                        # Sort by brightness (descending) and take the lightest
+                        lighter_variations.sort(key=lambda x: x[3], reverse=True)
+                        best_r, best_g, best_b, _ = lighter_variations[0]
+                        # Check if the color is too dark
+                        if self._is_too_dark(best_r, best_g, best_b):
+                            return self.PLAY_COLOR
+                        return (best_r, best_g, best_b)
+                    
+                    # Otherwise use the base color, but check if it's too dark
+                    if self._is_too_dark(base_r, base_g, base_b):
+                        return self.PLAY_COLOR
+                    return (base_r, base_g, base_b)
+            
+            # Fallback to default green if no suitable color found or if color is gray/white
+            return self.PLAY_COLOR
+        except Exception as e:
+            print(f"Error extracting color: {e}")
+            return self.PLAY_COLOR
+
     def _fetch_and_resize_image(self, url: str, width: int, height: int) -> Optional[Image.Image]:
         """Fetch and resize an image from URL."""
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             img = Image.open(BytesIO(response.content))
-            return img.resize((width, height), resample=Image.LANCZOS)
+            resized = img.resize((width, height), resample=Image.LANCZOS)
+            
+            # Extract prominent color from the original image (before resizing for display)
+            # Use a larger version for better color accuracy
+            color_img = img.resize((64, 64), resample=Image.LANCZOS)
+            self.current_prominent_color = self._extract_prominent_color(color_img)
+            
+            return resized
         except Exception as e:
             print(f"Error fetching image {url}: {e}")
             return None
@@ -613,7 +802,7 @@ class SpotifyPlayer:
         
         if duration_ms > 0:
             progress_width = round(((progress_ms / duration_ms) * 100) // 1.57)
-            draw.rectangle((0, line_y - 1, progress_width, line_y), fill=self.PLAY_COLOR)
+            draw.rectangle((0, line_y - 1, progress_width, line_y), fill=self.current_prominent_color)
 
 
     def _draw_play_pause_indicator(self, draw: ImageDraw.Draw, is_playing: bool):
@@ -622,11 +811,11 @@ class SpotifyPlayer:
         
         if is_playing:
             # Pause icon (two vertical bars) when playing
-            draw.line([(x, y), (x, y + 6)], fill=self.PLAY_COLOR, width=2)
-            draw.line([(x + 3, y), (x + 3, y + 6)], fill=self.PLAY_COLOR, width=2)
+            draw.line([(x, y), (x, y + 6)], fill=self.current_prominent_color, width=2)
+            draw.line([(x + 3, y), (x + 3, y + 6)], fill=self.current_prominent_color, width=2)
         else:
             # Play icon (triangle) when paused
-            draw.polygon([(x, y), (x, y + 6), (x + 4, y + 3)], fill=self.PLAY_COLOR)
+            draw.polygon([(x, y), (x, y + 6), (x + 4, y + 3)], fill=self.current_prominent_color)
     
 
     def _reset_animation_state(self):
