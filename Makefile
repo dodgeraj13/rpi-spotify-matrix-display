@@ -1,4 +1,4 @@
-install: ## Install package dependencies and request Spotify credentials
+install: ## Install dependencies and request Spotify credentials
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e .
@@ -52,11 +52,11 @@ emulate: ## Run the display within an emulator window
 
 ## RASPBERRY PI SPECIFIC TARGETS ##
 
-run: rpi-bindings rpi-optimize rpi-service ## Run the display on a raspberry pi connected matrix
+run: rpi-bindings rpi-service ## Run the display on a raspberry pi connected matrix
 	@echo "▶️ Starting Spotify Matrix Display..."
 	sudo .venv/bin/python main.py
 
-rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
+rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
 	@if ! dpkg -s python3-dev >/dev/null 2>&1; then \
 		echo "📦 Installing python3-dev..."; \
 		sudo apt-get update && sudo apt-get install -y python3-dev; \
@@ -77,10 +77,28 @@ rpi-bindings: ## Raspberry Pi ONLY - Install rpi-rgb-led-matrix python bindings
 		.venv/bin/pip install rpi-rgb-led-matrix/bindings/python --use-pep517; \
 	fi
 
-rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
+rpi-service: ## Raspberry Pi ONLY - Set up systemd service and alias
+	@if [ ! -f /etc/systemd/system/matrix.service ]; then \
+		echo "⚙️ Installing systemd service..."; \
+		sudo cp /home/pi/rpi-spotify-matrix-display/matrix.service /etc/systemd/system/matrix.service; \
+		echo "🔄 Reloading systemd..."; \
+		sudo systemctl daemon-reload; \
+		echo "✅ Enabling matrix service..."; \
+		sudo systemctl enable matrix; \
+		echo "🎉 Matrix service installed!"; \
+	fi
+	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
+		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
+		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
+		source ~/.bash_aliases; \
+		echo "Use matrix start|stop|restart to control it."; \
+		echo ""; \
+	fi
+
+rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance (OPTIONAL)
 	@read -p "⚠️ Would you like to reserve a CPU core for the display and disable onboard audio to optimize performance? [y/N]: " proceed; \
 	if [ "$$proceed" != "y" ] && [ "$$proceed" != "Y" ]; then \
-		echo "⏹ Optimization aborted by user."; \
+		echo "Optimization aborted by user."; \
 		exit 0; \
 	fi; \
 	changed=0; \
@@ -117,22 +135,4 @@ rpi-optimize: ## Raspberry Pi ONLY - Optimize matrix performance
 		else \
 			echo "Reboot skipped. Remember to reboot manually later."; \
 		fi; \
-	fi
-
-rpi-service: ## Install systemd service from repo and enable it
-	@if [ ! -f /etc/systemd/system/matrix.service ]; then \
-		echo "⚙️ Installing systemd service..."; \
-		sudo cp /home/pi/rpi-spotify-matrix-display/matrix.service /etc/systemd/system/matrix.service; \
-		echo "🔄 Reloading systemd..."; \
-		sudo systemctl daemon-reload; \
-		echo "✅ Enabling matrix service..."; \
-		sudo systemctl enable matrix; \
-		echo "🎉 Matrix service installed!"; \
-	fi
-	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
-		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
-		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
-		source ~/.bash_aliases; \
-		echo "Use matrix start|stop|restart to control it."; \
-		echo ""; \
 	fi
