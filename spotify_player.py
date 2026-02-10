@@ -29,10 +29,6 @@ class SpotifyPlayer:
     PAUSED_DELAY = 5
     FETCH_INTERVAL = 1
     SLIDE_ANIMATION_FRAMES = 17  # Number of frames for slide animation
-    ART_SIZE_COMPACT = (40, 40)  # Width, Height for compact album art (square, shrunken to make room for lyrics)
-    ART_POSITION = (12, 14)  # X, Y position of album art (centered horizontally: (64-40)/2 = 12)
-    LYRICS_START_Y = 55  # Y position to start drawing lyrics (below album art which ends at y=54)
-    LYRICS_LINE_HEIGHT = 6  # Height of each lyric line
     
 
     def __init__(self, config, spotify_module: SpotifyModule):
@@ -223,7 +219,7 @@ class SpotifyPlayer:
                 self.next_track_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
             else:
                 # Compact size for playing
-                self.next_track_art_img = self._fetch_and_resize_image(art_url, self.ART_SIZE_COMPACT[0], self.ART_SIZE_COMPACT[1])
+                self.next_track_art_img = self._fetch_and_resize_image(art_url, 48, 48)
             self.next_track_art_url = art_url
         elif not art_url:
             # No art URL, use default color
@@ -246,13 +242,13 @@ class SpotifyPlayer:
         show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
         
         if show_fullscreen and self.current_art_img and art_url:
-            if self.current_art_img.size == self.ART_SIZE_COMPACT:
+            if self.current_art_img.size == (48, 48):
                 self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
             new_frame.paste(self.current_art_img, (0, 0))
         else:
             # Show compact view
-            if self.current_art_img and self.current_art_img.size == self.ART_SIZE_COMPACT:
-                new_frame.paste(self.current_art_img, self.ART_POSITION)
+            if self.current_art_img and self.current_art_img.size == (48, 48):
+                new_frame.paste(self.current_art_img, (8, 14))
             
             # Draw track title and artist text (without updating animation state)
             text_length = self.CANVAS_WIDTH - 12
@@ -362,14 +358,14 @@ class SpotifyPlayer:
         show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
         
         if show_fullscreen and self.current_art_img and art_url:
-            if self.current_art_img.size == self.ART_SIZE_COMPACT:
+            if self.current_art_img.size == (48, 48):
                 self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
             frame.paste(self.current_art_img, (0, 0))
             return frame
         
         # Show compact view
-        if self.current_art_img and self.current_art_img.size == self.ART_SIZE_COMPACT:
-            frame.paste(self.current_art_img, self.ART_POSITION)
+        if self.current_art_img and self.current_art_img.size == (48, 48):
+            frame.paste(self.current_art_img, (8, 14))
         
         # Draw track title and artist text
         self._draw_scrolling_text(draw, title, artist)
@@ -499,8 +495,8 @@ class SpotifyPlayer:
             # Reuse cached image if available and correct size, otherwise fetch/resize
             if cached_img and cached_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
                 self.current_art_img = cached_img
-            elif cached_img and cached_img.size == self.ART_SIZE_COMPACT:
-                # Resize from compact size to 64x64
+            elif cached_img and cached_img.size == (48, 48):
+                # Resize from 48x48 to 64x64
                 self.current_art_img = cached_img.resize((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), resample=Image.LANCZOS)
             else:
                 self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
@@ -510,13 +506,13 @@ class SpotifyPlayer:
             if needs_update:
                 self.current_art_url = art_url
                 # Reuse cached image if available and correct size, otherwise fetch/resize
-                if cached_img and cached_img.size == self.ART_SIZE_COMPACT:
+                if cached_img and cached_img.size == (48, 48):
                     self.current_art_img = cached_img
                 elif cached_img and cached_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
-                    # Resize from 64x64 to compact size
-                    self.current_art_img = cached_img.resize(self.ART_SIZE_COMPACT, resample=Image.LANCZOS)
+                    # Resize from 64x64 to 48x48
+                    self.current_art_img = cached_img.resize((48, 48), resample=Image.LANCZOS)
                 else:
-                    self.current_art_img = self._fetch_and_resize_image(art_url, self.ART_SIZE_COMPACT[0], self.ART_SIZE_COMPACT[1])
+                    self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
     
 
     def _is_gray_or_white(self, r: int, g: int, b: int) -> bool:
@@ -713,96 +709,69 @@ class SpotifyPlayer:
 
 
     def _draw_lyrics(self, frame: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int):
-        """Draw synchronized lyrics on the display - split into rows that fit on screen, showing progressively."""
+        """Draw synchronized lyrics on the display."""
         lyric_lines = lyrics['lyrics']['lines']
         current_time_ms = int(progress_ms)
 
-        # Find the current lyric line and calculate its duration
-        current_line_text = None
-        current_line_start_ms = 0
-        next_line_start_ms = None
-        
-        for i, line in enumerate(lyric_lines):
-            line_start_ms = int(line['startTimeMs'])
-            if line_start_ms <= current_time_ms:
+        # Find the latest lyric line up to current time
+        current_line = None
+        for line in lyric_lines:
+            if int(line['startTimeMs']) <= current_time_ms:
                 text = line['words'].strip()
                 if text:
-                    current_line_text = text
-                    current_line_start_ms = line_start_ms
+                    current_line = text
             else:
-                # Found the next line - use its start time as the end of current line
-                if current_line_text:
-                    next_line_start_ms = line_start_ms
                 break
-        
-        # If we're at the last line, estimate duration (use 3 seconds default)
-        if current_line_text and next_line_start_ms is None:
-            next_line_start_ms = current_line_start_ms + 3000
-        
-        if current_line_text and next_line_start_ms:
-            # Calculate progress through this lyric line (0.0 to 1.0)
-            line_duration_ms = next_line_start_ms - current_line_start_ms
-            elapsed_in_line_ms = current_time_ms - current_line_start_ms
-            progress_through_line = min(1.0, max(0.0, elapsed_in_line_ms / line_duration_ms)) if line_duration_ms > 0 else 0.0
-            
-            # Split the lyric line into rows that fit on screen
-            text_width = self.CANVAS_WIDTH - 4  # Available width for lyrics
-            words = [w for w in current_line_text.split() if w]  # Filter out empty strings
-            rows = []
-            current_row = ""
-            
-            for word in words:
-                test_row = f"{current_row} {word}".strip() if current_row else word
-                if self.font.getlength(test_row) <= text_width:
-                    current_row = test_row
+
+        if current_line:
+            text_length = self.CANVAS_WIDTH - 6  # max width for wrapped text
+            words = current_line.split()
+            lines = []
+            current = ""
+
+            max_lines = 7
+            broke_early = False
+
+            for i, word in enumerate(words):
+                test = f"{current} {word}".strip()
+                if self.font.getlength(test) <= text_length:
+                    current = test
                 else:
-                    if current_row:
-                        rows.append(current_row)
-                    current_row = word
-            
-            if current_row:
-                rows.append(current_row)
-            
-            # If no rows were created but we have text, use the whole line (might be very long)
-            if not rows and current_line_text:
-                # Try to fit as much as possible
-                if self.font.getlength(current_line_text) <= text_width:
-                    rows = [current_line_text]
-                else:
-                    # Force split by character if needed
-                    rows = [current_line_text[:min(len(current_line_text), 30)]]
-            
-            # Show rows progressively based on progress through the lyric
-            total_rows = len(rows)
-            if total_rows > 0:
-                # Calculate which row to show based on progress
-                # Each row gets an equal portion of the lyric duration
-                # Example: 3 rows, progress 0.0-0.33 shows row 0, 0.33-0.66 shows row 1, 0.66-1.0 shows row 2
-                # For progress 1.0, show the last row
-                if progress_through_line >= 1.0:
-                    row_index = total_rows - 1
-                else:
-                    # Each row gets 1/total_rows of the duration
-                    # int() truncates, so we get: [0, 1/3) -> 0, [1/3, 2/3) -> 1, [2/3, 1.0) -> 2
-                    row_index = int(progress_through_line * total_rows)
-                    # Clamp to valid range (shouldn't be needed, but safety check)
-                    row_index = min(row_index, total_rows - 1)
-                row_to_show = rows[row_index]
-                
-                # Limit by available vertical space (below art, above progress bar)
-                available_space = 63 - self.LYRICS_START_Y
-                max_visible_rows = max(1, available_space // self.LYRICS_LINE_HEIGHT)
-                
-                # Draw the current row (centered vertically in available space if we have room)
-                if row_to_show.strip():
-                    y_pos = self.LYRICS_START_Y
-                    
-                    # Make sure we don't draw over the progress bar
-                    if y_pos < 63:
-                        # Center the text horizontally
-                        text_width_actual = self.font.getlength(row_to_show)
-                        x = max(0, (self.CANVAS_WIDTH - text_width_actual) // 2)
-                        draw.text((x, y_pos), row_to_show, fill=self.TITLE_COLOR, font=self.font)
+                    lines.append(current)
+                    current = word
+                    if len(lines) == max_lines - 1:
+                        # We have filled 6 lines, next is 7th
+                        # If we still have words remaining, break early
+                        if i < len(words) - 1:
+                            broke_early = True
+                        break
+
+            # Append the last line (7th)
+            if len(lines) < max_lines - 1:
+                # fewer than 6 lines so just append current
+                lines.append(current)
+            else:
+                # 7th line, truncate if broke_early (more text exists)
+                if broke_early:
+                    ellipsis = ".."
+                    while self.font.getlength(current + ellipsis) > text_length and current:
+                        current = current.rsplit(" ", 1)[0]
+                    current = (current + ellipsis).strip()
+                lines.append(current)
+
+            # Center vertically in 48x48 box starting at y=14
+            line_height = 6  # adjust if needed based on your font
+            total_height = len(lines) * line_height
+            y_start = 14 + (48 - total_height) // 2
+
+            overlay = Image.new("RGBA", (64, 48), (0, 0, 0, 150))  # semi-transparent black
+            frame.paste(overlay, (0, 14), overlay)
+
+            for i, line in enumerate(lines):
+                text_width = self.font.getlength(line)
+                x = (self.CANVAS_WIDTH - text_width) // 2
+                y = y_start + i * line_height
+                draw.text((x, y), line, fill=self.TITLE_COLOR, font=self.font)
 
     def _draw_scrolling_text(self, draw: ImageDraw.Draw, title: str, artist: str):
         """Draw scrolling text for title and artist."""
