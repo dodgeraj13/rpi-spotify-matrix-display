@@ -401,8 +401,7 @@ class SpotifyPlayer:
             self.paused_time = math.floor(time.time())
             self.paused = True
         elif is_playing and self.paused:
-            # Reset animation state when transitioning from paused to playing
-            self._reset_animation_state()
+            # Don't reset animation state when resuming - preserve title and artist positions
             self.paused_time = math.floor(time.time())
             self.paused = False
         
@@ -724,6 +723,10 @@ class SpotifyPlayer:
                 break
 
         if current_line:
+            # Don't show lyrics if the only content is a music note
+            if current_line == "♪":
+                return
+            
             text_length = self.CANVAS_WIDTH - 6  # max width for wrapped text
             words = current_line.split()
             lines = []
