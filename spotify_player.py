@@ -312,11 +312,15 @@ class SpotifyPlayer:
             self.previous_frame = None
             self.previous_frame_modified = None
             self.next_frame = None
+            # Preserve cached image before clearing
+            cached_art_img = self.next_track_art_img
+            cached_art_url = self.next_track_art_url
             self.next_track_art_img = None
             self.next_track_art_url = None
             # Now update the actual track info
             self._update_track_info(artist, title)
-            self._update_album_art(art_url, is_playing)
+            # Reuse cached image if available to avoid re-fetching
+            self._update_album_art(art_url, is_playing, cached_art_img if cached_art_url == art_url else None)
         
         return composite
 
@@ -458,7 +462,7 @@ class SpotifyPlayer:
             self._reset_animation_state()
 
 
-    def _update_album_art(self, art_url: str, is_playing: bool):
+    def _update_album_art(self, art_url: str, is_playing: bool, cached_img: Optional[Image.Image] = None):
         """Update album art based on playback state."""
         if not art_url:
             self.current_prominent_color = self.PLAY_COLOR
@@ -469,13 +473,27 @@ class SpotifyPlayer:
         
         if show_fullscreen and self.current_art_url != art_url:
             self.current_art_url = art_url
-            self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+            # Reuse cached image if available and correct size, otherwise fetch/resize
+            if cached_img and cached_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
+                self.current_art_img = cached_img
+            elif cached_img and cached_img.size == (48, 48):
+                # Resize from 48x48 to 64x64
+                self.current_art_img = cached_img.resize((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), resample=Image.LANCZOS)
+            else:
+                self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
         elif not show_fullscreen:
             needs_update = (self.current_art_url != art_url or 
                           (self.current_art_img and self.current_art_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT)))
             if needs_update:
                 self.current_art_url = art_url
-                self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
+                # Reuse cached image if available and correct size, otherwise fetch/resize
+                if cached_img and cached_img.size == (48, 48):
+                    self.current_art_img = cached_img
+                elif cached_img and cached_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
+                    # Resize from 64x64 to 48x48
+                    self.current_art_img = cached_img.resize((48, 48), resample=Image.LANCZOS)
+                else:
+                    self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
     
 
     def _is_gray_or_white(self, r: int, g: int, b: int) -> bool:
