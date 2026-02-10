@@ -745,7 +745,7 @@ class SpotifyPlayer:
             total_height = len(lines) * line_height
             y_start = 14 + (48 - total_height) // 2
 
-            overlay = Image.new("RGBA", (64, 48), (0, 0, 0, 120))  # semi-transparent black
+            overlay = Image.new("RGBA", (64, 48), (0, 0, 0, 150))  # semi-transparent black
             frame.paste(overlay, (0, 14), overlay)
 
             for i, line in enumerate(lines):
