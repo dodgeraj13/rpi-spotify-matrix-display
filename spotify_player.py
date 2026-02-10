@@ -93,6 +93,8 @@ class SpotifyPlayer:
         
         # Spotify integration
         self.response: Optional[PlaybackInfo] = None
+        self.response_timestamp: float = 0.0  # When response was last updated
+        self.response_progress_ms: int = 0  # progress_ms at response_timestamp
         
         # Start background thread for Spotify data
         self.thread = threading.Thread(target=self._get_current_playback_async, daemon=True)
@@ -104,6 +106,9 @@ class SpotifyPlayer:
         while True:
             try:
                 self.response = self.spotify_module.get_current_playback()
+                if self.response:
+                    self.response_timestamp = time.time()
+                    self.response_progress_ms = self.response.progress_ms
                 time.sleep(self.FETCH_INTERVAL)
             except Exception as e:
                 print(f"Error fetching Spotify data: {e}")
@@ -115,6 +120,9 @@ class SpotifyPlayer:
         if not self.spotify_module.queue.empty():
             self.response = self.spotify_module.queue.get()
             self.spotify_module.queue.queue.clear()
+            if self.response:
+                self.response_timestamp = time.time()
+                self.response_progress_ms = self.response.progress_ms
         
         return self._generate_frame(self.response)
 
@@ -131,10 +139,21 @@ class SpotifyPlayer:
         title = response.title
         art_url = response.art_url
         is_playing = response.is_playing
-        progress_ms = response.progress_ms
         duration_ms = response.duration_ms
         lyrics = response.lyrics
         track_id = response.track_id
+        
+        # Extrapolate progress_ms if playing to account for time since last API call
+        # This ensures lyrics appear on time even between API updates
+        if is_playing and self.response_timestamp > 0:
+            elapsed_seconds = time.time() - self.response_timestamp
+            elapsed_ms = int(elapsed_seconds * 1000)
+            progress_ms = self.response_progress_ms + elapsed_ms
+            # Clamp to duration to avoid going past the end
+            if duration_ms > 0:
+                progress_ms = min(progress_ms, duration_ms)
+        else:
+            progress_ms = response.progress_ms
         
         # Check for track change and determine direction
         if track_id and track_id != self.current_track_id:
