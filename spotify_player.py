@@ -460,12 +460,10 @@ class SpotifyPlayer:
         # Update track ID (but don't update other track info yet - that happens after animation)
         self.current_track_id = new_track_id
         
-        # Update queue history
+        # Update queue history: append only when new (never reorder on revisit).
+        # Order must stay as first-played so direction (next vs previous) is correct
+        # when skipping forward again after going back.
         if new_track_id not in self.track_queue_history:
-            self.track_queue_history.append(new_track_id)
-        else:
-            # Move to end if already in history
-            self.track_queue_history.remove(new_track_id)
             self.track_queue_history.append(new_track_id)
         
         # Limit history size
