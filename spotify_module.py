@@ -50,7 +50,9 @@ class SpotifyModule:
         self.spl: Optional[SyricsSpotify] = None
         self.last_track_id: Optional[str] = None
         self.last_lyrics: Optional[str] = None
-        
+        # Track which track we already retried lyrics for (after reinit) to avoid reinit loops
+        self._lyrics_retried_for_track: Optional[str] = None
+
         spotify_config = self._get_spotify_config()
 
         self._setup_spotify(spotify_config)
@@ -92,7 +94,62 @@ class SpotifyModule:
         else:
             print("Warning: sp_dc not provided, lyrics fetching will be disabled")
             self.spl = None
-        
+
+    def _reinit_syrics(self) -> bool:
+        """Re-initialize SyricsSpotify (e.g. after token expiry). Returns True if successful."""
+        spotify_config = self._get_spotify_config()
+        if not spotify_config or not spotify_config.sp_dc:
+            return False
+        try:
+            self.spl = SyricsSpotify(spotify_config.sp_dc)
+            print("Lyrics client re-initialized (token/session refreshed).")
+            return True
+        except Exception as e:
+            print(f"Could not re-initialize lyrics client: {e}")
+            self.spl = None
+            return False
+
+    def _fetch_lyrics_with_retry(self, track_id: str):
+        """Fetch lyrics for track_id, re-initializing SyricsSpotify and retrying once on exception."""
+        if not self.spl:
+            return None
+        try:
+            result = self.spl.get_lyrics(track_id)
+            if result is not None:
+                self._lyrics_retried_for_track = None  # success; allow retry for next track
+            return result
+        except Exception as e:
+            print(f"Error fetching lyrics for track {track_id}: {e}")
+        # Retry once after re-initializing (handles expired token / stale session)
+        self._lyrics_retried_for_track = track_id  # avoid double reinit in _fetch_lyrics_with_retry_on_none
+        if self._reinit_syrics():
+            try:
+                result = self.spl.get_lyrics(track_id)
+                if result is not None:
+                    self._lyrics_retried_for_track = None
+                return result
+            except Exception as e2:
+                print(f"Error fetching lyrics after reinit: {e2}")
+        return None
+
+    def _fetch_lyrics_with_retry_on_none(self, track_id: str):
+        """Fetch lyrics; if first attempt returns None, reinit and retry once (handles 401->None)."""
+        first = self._fetch_lyrics_with_retry(track_id)
+        if first is not None:
+            return first
+        if self._lyrics_retried_for_track == track_id:
+            return None  # already retried for this track (exception path or previous None retry)
+        self._lyrics_retried_for_track = track_id
+        if self._reinit_syrics():
+            try:
+                result = self.spl.get_lyrics(track_id)
+                if result is not None:
+                    self._lyrics_retried_for_track = None
+                return result
+            except Exception as e:
+                print(f"Error fetching lyrics after reinit: {e}")
+        return None
+
     def _get_spotify_config(self) -> Optional[SpotifyConfig]:
         """Extract Spotify configuration from config parser."""
         if not self.config or 'Spotify' not in self.config:
@@ -195,13 +252,9 @@ class SpotifyModule:
         # Fetch lyrics if we have a SyricsSpotify instance and a new track
         if self.spl and track_id:
             if track_id != self.last_track_id:
-                try:
-                    self.last_lyrics = self.spl.get_lyrics(track_id)
-                    self.last_track_id = track_id
-                except Exception as e:
-                    print(f"Error fetching lyrics for track {track_id}: {e}")
-                    self.last_lyrics = None
-                    self.last_track_id = track_id
+                lyrics_result = self._fetch_lyrics_with_retry_on_none(track_id)
+                self.last_lyrics = lyrics_result
+                self.last_track_id = track_id
             lyrics = self.last_lyrics
         
         return PlaybackInfo(
