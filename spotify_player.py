@@ -4,11 +4,12 @@ spotify_player.py: Handles the display of Spotify track information and album ar
 """
 
 import math
+import queue
 import threading
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -99,6 +100,14 @@ class SpotifyPlayer:
         self.response: Optional[PlaybackInfo] = None
         self.response_timestamp: float = 0.0  # When response was last updated
         self.response_progress_ms: int = 0  # progress_ms at response_timestamp
+        
+        # Background image loader: fetch/resize/color-extract off the frame thread
+        self._image_cache: dict[str, Tuple[Image.Image, tuple]] = {}
+        self._image_pending: set = set()
+        self._image_request_queue: queue.Queue = queue.Queue()
+        self._image_cache_lock = threading.Lock()
+        self._image_loader_thread = threading.Thread(target=self._image_loader_loop, daemon=True)
+        self._image_loader_thread.start()
         
         # Start background thread for Spotify data
         self.thread = threading.Thread(target=self._get_current_playback_async, daemon=True)
@@ -191,9 +200,13 @@ class SpotifyPlayer:
     def _generate_fullscreen_frame(self, art_url: str, is_playing: bool,
                                    progress_ms: int, duration_ms: int) -> Image.Image:
         """Generate fullscreen album art frame with progress bar at bottom. No metadata or lyrics."""
-        if art_url and self.current_art_url != art_url:
-            self.current_art_url = art_url
-            self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+        if art_url:
+            img, color = self._get_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+            if img is not None:
+                self.current_art_url = art_url
+                self.current_art_img = img
+                if color is not None:
+                    self.current_prominent_color = color
         
         frame = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
         if self.current_art_img:
@@ -220,15 +233,16 @@ class SpotifyPlayer:
         temp_art_img = self.current_art_img
         temp_prominent_color = self.current_prominent_color
         
-        # Fetch new album art once (cache it for subsequent frames)
+        # Get new album art from cache (loaded in background); keep previous if not ready yet
         if art_url and (art_url != self.next_track_art_url or self.next_track_art_img is None):
-            if self.always_fullscreen or not is_playing:
-                # Fullscreen size (always_fullscreen or paused)
-                self.next_track_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
-            else:
-                # Compact size for playing (normal mode)
-                self.next_track_art_img = self._fetch_and_resize_image(art_url, 48, 48)
-            self.next_track_art_url = art_url
+            need_64 = self.always_fullscreen or not is_playing
+            w, h = (self.CANVAS_WIDTH, self.CANVAS_HEIGHT) if need_64 else (48, 48)
+            img, color = self._get_image(art_url, w, h)
+            if img is not None:
+                self.next_track_art_img = img
+                self.next_track_art_url = art_url
+                if color is not None:
+                    self.current_prominent_color = color
         elif not art_url:
             # No art URL, use default color
             self.current_prominent_color = self.PLAY_COLOR
@@ -255,9 +269,9 @@ class SpotifyPlayer:
         if self.always_fullscreen:
             if self.current_art_img and self.current_art_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
                 new_frame.paste(self.current_art_img, (0, 0))
-            elif self.current_art_img and self.current_art_img.size == (48, 48) and art_url:
-                fullsize = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
-                if fullsize:
+            elif art_url:
+                fullsize, _ = self._get_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                if fullsize is not None:
                     new_frame.paste(fullsize, (0, 0))
                     self.current_art_img = fullsize
                     self.next_track_art_img = fullsize
@@ -268,8 +282,9 @@ class SpotifyPlayer:
             show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
         
             if show_fullscreen and self.current_art_img and art_url:
-                if self.current_art_img.size == (48, 48):
-                    self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                img_64, _ = self._get_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                if img_64 is not None:
+                    self.current_art_img = img_64
                 new_frame.paste(self.current_art_img, (0, 0))
             else:
                 # Show compact view
@@ -392,8 +407,9 @@ class SpotifyPlayer:
         show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
         
         if show_fullscreen and self.current_art_img and art_url:
-            if self.current_art_img.size == (48, 48):
-                self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+            img_64, _ = self._get_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+            if img_64 is not None:
+                self.current_art_img = img_64
             frame.paste(self.current_art_img, (0, 0))
             return frame
         
@@ -556,28 +572,36 @@ class SpotifyPlayer:
         show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
         
         if show_fullscreen and self.current_art_url != art_url:
-            self.current_art_url = art_url
-            # Reuse cached image if available and correct size, otherwise fetch/resize
             if cached_img and cached_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
+                self.current_art_url = art_url
                 self.current_art_img = cached_img
             elif cached_img and cached_img.size == (48, 48):
-                # Resize from 48x48 to 64x64
+                self.current_art_url = art_url
                 self.current_art_img = cached_img.resize((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), resample=Image.LANCZOS)
             else:
-                self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                img, color = self._get_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                if img is not None:
+                    self.current_art_url = art_url
+                    self.current_art_img = img
+                    if color is not None:
+                        self.current_prominent_color = color
         elif not show_fullscreen:
             needs_update = (self.current_art_url != art_url or 
                           (self.current_art_img and self.current_art_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT)))
             if needs_update:
-                self.current_art_url = art_url
-                # Reuse cached image if available and correct size, otherwise fetch/resize
                 if cached_img and cached_img.size == (48, 48):
+                    self.current_art_url = art_url
                     self.current_art_img = cached_img
                 elif cached_img and cached_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
-                    # Resize from 64x64 to 48x48
+                    self.current_art_url = art_url
                     self.current_art_img = cached_img.resize((48, 48), resample=Image.LANCZOS)
                 else:
-                    self.current_art_img = self._fetch_and_resize_image(art_url, 48, 48)
+                    img, color = self._get_image(art_url, 48, 48)
+                    if img is not None:
+                        self.current_art_url = art_url
+                        self.current_art_img = img
+                        if color is not None:
+                            self.current_prominent_color = color
     
 
     def _is_gray_or_white(self, r: int, g: int, b: int) -> bool:
@@ -754,24 +778,54 @@ class SpotifyPlayer:
             print(f"Error extracting color: {e}")
             return self.PLAY_COLOR
 
-    def _fetch_and_resize_image(self, url: str, width: int, height: int) -> Optional[Image.Image]:
-        """Fetch and resize an image from URL."""
+    def _load_image_sync(self, url: str) -> Tuple[Optional[Image.Image], tuple]:
+        """Fetch image from URL, resize to 64x64, extract prominent color. Used by loader thread only.
+        Returns (img_64x64, prominent_color) or (None, PLAY_COLOR)."""
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             img = Image.open(BytesIO(response.content))
-            resized = img.resize((width, height), resample=Image.LANCZOS)
-            
-            # Extract prominent color from the original image (before resizing for display)
-            # Use a larger version for better color accuracy
-            color_img = img.resize((64, 64), resample=Image.LANCZOS)
-            self.current_prominent_color = self._extract_prominent_color(color_img)
-            
-            return resized
+            img_64 = img.resize((self.CANVAS_WIDTH, self.CANVAS_HEIGHT), resample=Image.LANCZOS)
+            if img_64.mode != 'RGB':
+                img_64 = img_64.convert('RGB')
+            color = self._extract_prominent_color(img_64)
+            return (img_64, color)
         except Exception as e:
             print(f"Error fetching image {url}: {e}")
-            return None
+            return (None, self.PLAY_COLOR)
 
+    def _image_loader_loop(self):
+        """Background thread: pull URLs from queue, fetch+resize+color, store in cache."""
+        while True:
+            try:
+                url = self._image_request_queue.get()
+                if url is None:
+                    break
+                img, color = self._load_image_sync(url)
+                with self._image_cache_lock:
+                    if img is not None:
+                        self._image_cache[url] = (img, color)
+                    self._image_pending.discard(url)
+            except Exception as e:
+                print(f"Image loader error: {e}")
+                with self._image_cache_lock:
+                    self._image_pending.discard(url)
+
+    def _get_image(self, url: str, width: int, height: int) -> Tuple[Optional[Image.Image], Optional[tuple]]:
+        """Non-blocking: return cached (img, color) for url, or (None, None) and request load in background.
+        Cache stores 64x64 per URL; smaller sizes are resized from that."""
+        if not url:
+            return (None, None)
+        with self._image_cache_lock:
+            if url in self._image_cache:
+                img64, color = self._image_cache[url]
+                if (width, height) == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
+                    return (img64, color)
+                return (img64.resize((width, height), resample=Image.LANCZOS), color)
+            if url not in self._image_pending:
+                self._image_pending.add(url)
+                self._image_request_queue.put(url)
+        return (None, None)
 
     def _draw_lyrics(self, frame: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int):
         """Draw synchronized lyrics on the display."""
