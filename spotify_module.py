@@ -176,34 +176,27 @@ class SpotifyModule:
             sp_dc=spotify_section.get('sp_dc')
         )
     
-    def is_device_whitelisted(self, device_name: Optional[str] = None) -> bool:
-        """Check if the given device (or current active device) is in the whitelist.
-
-        Prefer passing device_name from the currently-playing response so we whitelist
-        the device that is actually playing (e.g. AVR), not the controller (e.g. phone).
-        """
+    def is_device_whitelisted(self) -> bool:
+        """Check if current device is in the whitelist."""
         if not self.config or 'Spotify' not in self.config:
             return True
-
+        
         spotify_section = self.config['Spotify']
         if 'device_whitelist' not in spotify_section:
             return True
-
-        whitelist = self._parse_device_whitelist(spotify_section['device_whitelist'])
-
-        # Use the device from the playback response (the one actually playing)
-        if device_name is not None:
-            return device_name.strip() in [d.strip() for d in whitelist]
-
-        # Fallback: no playback context, check devices() for an active whitelisted device
+        
         try:
             if not self.spotify:
                 return False
+            
             devices = self.spotify.devices()
+            whitelist = self._parse_device_whitelist(spotify_section['device_whitelist'])
+            
             return any(
                 device['name'] in whitelist and device['is_active']
                 for device in devices['devices']
             )
+            
         except Exception as e:
             print(f"Error checking device whitelist: {e}")
             return False
@@ -221,13 +214,8 @@ class SpotifyModule:
         
         try:
             track = self.spotify.current_user_playing_track()
-
-            if not track:
-                return None
-
-            # Use the device from the playback response (actually playing), not devices() "active"
-            playing_device_name = (track.get('device') or {}).get('name')
-            if not self.is_device_whitelisted(playing_device_name):
+            
+            if not track or not self.is_device_whitelisted():
                 return None
             
             playback_info = self._create_playback_info(track)
