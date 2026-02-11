@@ -157,7 +157,7 @@ class SpotifyPlayer:
         
         # Check for track change and determine direction
         if track_id and track_id != self.current_track_id:
-            self._handle_track_change(track_id)
+            self._handle_track_change(track_id, progress_ms, duration_ms)
         
         # Update last active time if playing
         if is_playing:
@@ -167,7 +167,7 @@ class SpotifyPlayer:
         if current_time - self.last_active_time >= self.shutdown_delay:
             return self.black_screen
         
-        # Handle slide animation
+        # Handle slide animation (fullscreen mode uses art-only slide; normal mode uses metadata + art)
         if self.slide_animation_active:
             frame = self._generate_slide_animation_frame(
                 artist, title, art_url, is_playing, progress_ms, duration_ms, lyrics
@@ -177,15 +177,16 @@ class SpotifyPlayer:
             # Animation complete, continue with normal frame generation
         
         if self.always_fullscreen:
-            return self._generate_fullscreen_frame(art_url, is_playing)
+            return self._generate_fullscreen_frame(art_url, is_playing, progress_ms, duration_ms)
         else:
             return self._generate_now_playing_frame(
                 artist, title, art_url, is_playing, progress_ms, duration_ms, lyrics
             )
     
 
-    def _generate_fullscreen_frame(self, art_url: str, is_playing: bool) -> Image.Image:
-        """Generate fullscreen album art frame."""
+    def _generate_fullscreen_frame(self, art_url: str, is_playing: bool,
+                                   progress_ms: int, duration_ms: int) -> Image.Image:
+        """Generate fullscreen album art frame with progress bar at bottom. No metadata or lyrics."""
         if art_url and self.current_art_url != art_url:
             self.current_art_url = art_url
             self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
@@ -194,6 +195,8 @@ class SpotifyPlayer:
         if self.current_art_img:
             frame.paste(self.current_art_img, (0, 0))
         
+        draw = ImageDraw.Draw(frame)
+        self._draw_progress_bar(draw, progress_ms, duration_ms)
         return frame
 
 
@@ -214,11 +217,11 @@ class SpotifyPlayer:
         
         # Fetch new album art once (cache it for subsequent frames)
         if art_url and (art_url != self.next_track_art_url or self.next_track_art_img is None):
-            if not is_playing:
-                # Fullscreen size for paused
+            if self.always_fullscreen or not is_playing:
+                # Fullscreen size (always_fullscreen or paused)
                 self.next_track_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
             else:
-                # Compact size for playing
+                # Compact size for playing (normal mode)
                 self.next_track_art_img = self._fetch_and_resize_image(art_url, 48, 48)
             self.next_track_art_url = art_url
         elif not art_url:
@@ -237,52 +240,64 @@ class SpotifyPlayer:
         new_frame = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
         draw = ImageDraw.Draw(new_frame)
         
-        # Show fullscreen when paused (after pause delay)
-        current_time = math.floor(time.time())
-        show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
-        
-        if show_fullscreen and self.current_art_img and art_url:
-            if self.current_art_img.size == (48, 48):
-                self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
-            new_frame.paste(self.current_art_img, (0, 0))
+        # Always-fullscreen mode: new frame is only 64x64 art (no metadata/lyrics); progress bar drawn on composite
+        if self.always_fullscreen:
+            if self.current_art_img and self.current_art_img.size == (self.CANVAS_WIDTH, self.CANVAS_HEIGHT):
+                new_frame.paste(self.current_art_img, (0, 0))
+            elif self.current_art_img and self.current_art_img.size == (48, 48) and art_url:
+                fullsize = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                if fullsize:
+                    new_frame.paste(fullsize, (0, 0))
+                    self.current_art_img = fullsize
+                    self.next_track_art_img = fullsize
+            # Don't draw progress bar, title, artist, lyrics, or play/pause on new_frame
         else:
-            # Show compact view
-            if self.current_art_img and self.current_art_img.size == (48, 48):
-                new_frame.paste(self.current_art_img, (8, 14))
-            
-            # Draw track title and artist text (without updating animation state)
-            text_length = self.CANVAS_WIDTH - 12
-            x_offset = 1
-            spacer = "     "
-            
-            title = title or "Unknown Title"
-            artist = artist or "Unknown Artist"
-            
-            # Draw title (static, no scrolling during animation)
-            title_len = self.font.getlength(title)
-            if title_len > text_length:
-                draw.text((x_offset, 1), title[:20] + "...", self.TITLE_COLOR, font=self.font)
+            # Show fullscreen when paused (after pause delay)
+            current_time = math.floor(time.time())
+            show_fullscreen = not is_playing and (current_time - self.paused_time >= self.PAUSED_DELAY)
+        
+            if show_fullscreen and self.current_art_img and art_url:
+                if self.current_art_img.size == (48, 48):
+                    self.current_art_img = self._fetch_and_resize_image(art_url, self.CANVAS_WIDTH, self.CANVAS_HEIGHT)
+                new_frame.paste(self.current_art_img, (0, 0))
             else:
-                draw.text((x_offset, 1), title, self.TITLE_COLOR, font=self.font)
-            
-            # Draw artist (static, no scrolling during animation)
-            artist_len = self.font.getlength(artist)
-            if artist_len > text_length:
-                draw.text((x_offset, 7), artist[:20] + "...", self.ARTIST_COLOR, font=self.font)
-            else:
-                draw.text((x_offset, 7), artist, self.ARTIST_COLOR, font=self.font)
-            
-            # Clear text areas
-            draw.rectangle((0, 0, 0, 12), fill=(0, 0, 0))
-            draw.rectangle((52, 0, 63, 12), fill=(0, 0, 0))
+                # Show compact view
+                if self.current_art_img and self.current_art_img.size == (48, 48):
+                    new_frame.paste(self.current_art_img, (8, 14))
+                
+                # Draw track title and artist text (without updating animation state)
+                text_length = self.CANVAS_WIDTH - 12
+                x_offset = 1
+                spacer = "     "
+                
+                title = title or "Unknown Title"
+                artist = artist or "Unknown Artist"
+                
+                # Draw title (static, no scrolling during animation)
+                title_len = self.font.getlength(title)
+                if title_len > text_length:
+                    draw.text((x_offset, 1), title[:20] + "...", self.TITLE_COLOR, font=self.font)
+                else:
+                    draw.text((x_offset, 1), title, self.TITLE_COLOR, font=self.font)
+                
+                # Draw artist (static, no scrolling during animation)
+                artist_len = self.font.getlength(artist)
+                if artist_len > text_length:
+                    draw.text((x_offset, 7), artist[:20] + "...", self.ARTIST_COLOR, font=self.font)
+                else:
+                    draw.text((x_offset, 7), artist, self.ARTIST_COLOR, font=self.font)
+                
+                # Clear text areas
+                draw.rectangle((0, 0, 0, 12), fill=(0, 0, 0))
+                draw.rectangle((52, 0, 63, 12), fill=(0, 0, 0))
 
-            # Draw lyrics if available and playing
-            if is_playing and lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
-                self._draw_lyrics(new_frame, draw, lyrics, progress_ms)
-            
-            # Draw play/pause indicator for the new frame (sliding in)
-            # Don't draw progress bar - it will be drawn statically on top
-            self._draw_play_pause_indicator(draw, is_playing)
+                # Draw lyrics if available and playing
+                if is_playing and lyrics and 'lyrics' in lyrics and 'lines' in lyrics['lyrics']:
+                    self._draw_lyrics(new_frame, draw, lyrics, progress_ms)
+                
+                # Draw play/pause indicator for the new frame (sliding in)
+                # Don't draw progress bar - it will be drawn statically on top
+                self._draw_play_pause_indicator(draw, is_playing)
         
         # Restore previous state
         self.current_artist = temp_artist
@@ -338,8 +353,13 @@ class SpotifyPlayer:
             self.next_track_art_url = None
             # Now update the actual track info
             self._update_track_info(artist, title)
-            # Reuse cached image if available to avoid re-fetching
-            self._update_album_art(art_url, is_playing, cached_art_img if cached_art_url == art_url else None)
+            if self.always_fullscreen:
+                # Keep 64x64 art for fullscreen mode (don't use _update_album_art which would use 48x48 when playing)
+                self.current_art_url = art_url
+                if cached_art_url == art_url and cached_art_img is not None:
+                    self.current_art_img = cached_art_img
+            else:
+                self._update_album_art(art_url, is_playing, cached_art_img if cached_art_url == art_url else None)
         
         return composite
 
@@ -408,25 +428,48 @@ class SpotifyPlayer:
         self.is_playing = is_playing
 
 
-    def _handle_track_change(self, new_track_id: str):
+    def _handle_track_change(self, new_track_id: str, progress_ms: int = 0, duration_ms: int = 1):
         """Handle track change and determine slide direction."""
         if not new_track_id:
             return
         
         # Capture current frame as previous before any updates
-        if not self.always_fullscreen and (self.current_title or self.current_artist):
+        if self.always_fullscreen:
+            # Fullscreen mode: previous frame is current 64x64 art + progress bar
+            if self.current_art_img is not None:
+                self.previous_frame = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
+                self.previous_frame.paste(self.current_art_img, (0, 0))
+                draw = ImageDraw.Draw(self.previous_frame)
+                self._draw_progress_bar(draw, progress_ms, duration_ms)
+                self.previous_frame_modified = self.previous_frame.copy()
+                prev_draw = ImageDraw.Draw(self.previous_frame_modified)
+                prev_draw.rectangle((0, 62, 63, 63), fill=(0, 0, 0))
+            else:
+                self.previous_frame = None
+                self.previous_frame_modified = None
+        elif (self.current_title or self.current_artist):
             # Generate frame with current state
             self.previous_frame = self._generate_now_playing_frame(
                 self.current_artist, self.current_title, self.current_art_url,
                 self.is_playing, 0, 0, None
             )
-            # Pre-modify previous frame (hide progress bar and play/pause) and cache it
             self.previous_frame_modified = self.previous_frame.copy()
-            prev_draw = ImageDraw.Draw(self.previous_frame_modified)
-            # Cover progress bar at bottom (line 63)
-            prev_draw.rectangle((0, 62, 63, 63), fill=(0, 0, 0))
-            # Cover play/pause indicator (around 55, 3 to 59, 9)
-            prev_draw.rectangle((54, 2, 63, 10), fill=(0, 0, 0))
+            # Only hide progress bar and play/pause when previous was compact view.
+            # When we were on full-screen artwork, the frame has no UI overlays, so
+            # drawing those rectangles would overlap the art as it slides off.
+            current_time = math.floor(time.time())
+            was_fullscreen = (
+                not self.is_playing
+                and (current_time - self.paused_time >= self.PAUSED_DELAY)
+                and self.current_art_url
+                and self.current_art_img
+            )
+            if not was_fullscreen:
+                prev_draw = ImageDraw.Draw(self.previous_frame_modified)
+                # Cover progress bar at bottom (line 63)
+                prev_draw.rectangle((0, 62, 63, 63), fill=(0, 0, 0))
+                # Cover play/pause indicator (around 55, 3 to 59, 9)
+                prev_draw.rectangle((54, 2, 63, 10), fill=(0, 0, 0))
         else:
             self.previous_frame_modified = None
         
