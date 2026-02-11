@@ -4,6 +4,7 @@ spotify_module.py: Spotify API integration and authentication for the matrix dis
 """
 
 import os
+import time
 from dataclasses import dataclass
 from queue import LifoQueue
 from typing import Optional
@@ -52,6 +53,11 @@ class SpotifyModule:
         self.last_lyrics: Optional[str] = None
         # Track which track we already retried lyrics for (after reinit) to avoid reinit loops
         self._lyrics_retried_for_track: Optional[str] = None
+
+        # Device whitelist check cache (avoid calling devices() every second)
+        self._device_whitelist_result: Optional[bool] = None
+        self._device_whitelist_cache_time: float = 0.0
+        self.DEVICE_CHECK_INTERVAL = 5  # seconds
 
         spotify_config = self._get_spotify_config()
 
@@ -177,7 +183,7 @@ class SpotifyModule:
         )
     
     def is_device_whitelisted(self) -> bool:
-        """Check if current device is in the whitelist."""
+        """Check if current device is in the whitelist. Skips devices() if no devices are whitelisted; otherwise caches result for 5 seconds."""
         if not self.config or 'Spotify' not in self.config:
             return True
         
@@ -185,18 +191,26 @@ class SpotifyModule:
         if 'device_whitelist' not in spotify_section:
             return True
         
+        whitelist = self._parse_device_whitelist(spotify_section['device_whitelist'])
+        names = {d.strip() for d in whitelist if d and d.strip()}
+        if not names:
+            return True  # No devices whitelisted = no restriction, skip devices() call
+        
         try:
             if not self.spotify:
                 return False
             
+            now = time.time()
+            if self._device_whitelist_result is not None and (now - self._device_whitelist_cache_time) < self.DEVICE_CHECK_INTERVAL:
+                return self._device_whitelist_result
+            
             devices = self.spotify.devices()
-            whitelist = self._parse_device_whitelist(spotify_section['device_whitelist'])
-            names = {d.strip() for d in whitelist}
-
-            return any(
+            self._device_whitelist_result = any(
                 (device.get('name') or '').strip() in names and device.get('is_active', False)
                 for device in devices.get('devices', [])
             )
+            self._device_whitelist_cache_time = now
+            return self._device_whitelist_result
             
         except Exception as e:
             print(f"Error checking device whitelist: {e}")
