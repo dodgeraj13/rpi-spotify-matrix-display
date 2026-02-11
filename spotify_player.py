@@ -74,6 +74,10 @@ class SpotifyPlayer:
         self.next_frame: Optional[Image.Image] = None
         self.next_track_art_img: Optional[Image.Image] = None  # Cached art for next track
         self.next_track_art_url: Optional[str] = None
+        # Incoming track info during slide (so a mid-slide skip can build previous frame)
+        self._slide_incoming_artist: Optional[str] = None
+        self._slide_incoming_title: Optional[str] = None
+        self._slide_incoming_art_url: Optional[str] = None
         
         # Animation state
         self.title_animation_cnt = 0
@@ -195,8 +199,9 @@ class SpotifyPlayer:
         if self.current_art_img:
             frame.paste(self.current_art_img, (0, 0))
         
-        draw = ImageDraw.Draw(frame)
-        self._draw_progress_bar(draw, progress_ms, duration_ms)
+        if is_playing:
+            draw = ImageDraw.Draw(frame)
+            self._draw_progress_bar(draw, progress_ms, duration_ms)
         return frame
 
 
@@ -229,6 +234,12 @@ class SpotifyPlayer:
             self.current_prominent_color = self.PLAY_COLOR
         
         new_art_img = self.next_track_art_img
+        
+        # Store incoming track info on first frame so a mid-slide skip can build the previous frame
+        if self.slide_animation_frame == 0:
+            self._slide_incoming_artist = artist
+            self._slide_incoming_title = title
+            self._slide_incoming_art_url = art_url
         
         self.current_artist = artist
         self.current_title = title
@@ -346,6 +357,9 @@ class SpotifyPlayer:
             self.previous_frame = None
             self.previous_frame_modified = None
             self.next_frame = None
+            self._slide_incoming_artist = None
+            self._slide_incoming_title = None
+            self._slide_incoming_art_url = None
             # Preserve cached image before clearing
             cached_art_img = self.next_track_art_img
             cached_art_url = self.next_track_art_url
@@ -434,11 +448,16 @@ class SpotifyPlayer:
             return
         
         # Capture current frame as previous before any updates
+        # When we're mid-slide, current_* may not be set yet; use slide's incoming art/metadata
+        art_for_previous = self.current_art_img
+        if art_for_previous is None and self.slide_animation_active and self.next_track_art_img is not None:
+            art_for_previous = self.next_track_art_img  # First skip: use art we're currently sliding to
+        
         if self.always_fullscreen:
             # Fullscreen mode: previous frame is current 64x64 art + progress bar
-            if self.current_art_img is not None:
+            if art_for_previous is not None:
                 self.previous_frame = Image.new("RGB", (self.CANVAS_WIDTH, self.CANVAS_HEIGHT), (0, 0, 0))
-                self.previous_frame.paste(self.current_art_img, (0, 0))
+                self.previous_frame.paste(art_for_previous, (0, 0))
                 draw = ImageDraw.Draw(self.previous_frame)
                 self._draw_progress_bar(draw, progress_ms, duration_ms)
                 self.previous_frame_modified = self.previous_frame.copy()
@@ -447,10 +466,16 @@ class SpotifyPlayer:
             else:
                 self.previous_frame = None
                 self.previous_frame_modified = None
-        elif (self.current_title or self.current_artist):
-            # Generate frame with current state
+        elif (self.current_title or self.current_artist) or (
+            self.slide_animation_active
+            and (self._slide_incoming_title or self._slide_incoming_artist)
+        ):
+            # Generate frame with current state (or incoming track when mid-slide / first skip)
+            prev_artist = self.current_artist if (self.current_title or self.current_artist) else (self._slide_incoming_artist or '')
+            prev_title = self.current_title if (self.current_title or self.current_artist) else (self._slide_incoming_title or '')
+            prev_art_url = self.current_art_url if (self.current_title or self.current_artist) else (self._slide_incoming_art_url or '')
             self.previous_frame = self._generate_now_playing_frame(
-                self.current_artist, self.current_title, self.current_art_url,
+                prev_artist, prev_title, prev_art_url,
                 self.is_playing, 0, 0, None
             )
             self.previous_frame_modified = self.previous_frame.copy()
