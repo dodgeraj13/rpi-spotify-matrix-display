@@ -11,6 +11,7 @@ from typing import Optional
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+from spotipy.exceptions import SpotifyException
 
 from syrics.api import Spotify as SyricsSpotify
 
@@ -58,6 +59,10 @@ class SpotifyModule:
         self._device_whitelist_result: Optional[bool] = None
         self._device_whitelist_cache_time: float = 0.0
         self.DEVICE_CHECK_INTERVAL = 5  # seconds
+
+        # Rate limit: no requests until this time (seconds since epoch)
+        self._rate_limit_until: float = 0.0
+        self._RATE_LIMIT_DEFAULT_SECONDS = 3600  # when Retry-After is missing (e.g. after spotipy exhausts retries)
 
         spotify_config = self._get_spotify_config()
 
@@ -195,15 +200,18 @@ class SpotifyModule:
         names = {d.strip() for d in whitelist if d and d.strip()}
         if not names:
             return True  # No devices whitelisted = no restriction, skip devices() call
-        
+
+        if self._is_rate_limited():
+            return False
+
         try:
             if not self.spotify:
                 return False
-            
+
             now = time.time()
             if self._device_whitelist_result is not None and (now - self._device_whitelist_cache_time) < self.DEVICE_CHECK_INTERVAL:
                 return self._device_whitelist_result
-            
+
             devices = self.spotify.devices()
             self._device_whitelist_result = any(
                 (device.get('name') or '').strip() in names and device.get('is_active', False)
@@ -211,7 +219,12 @@ class SpotifyModule:
             )
             self._device_whitelist_cache_time = now
             return self._device_whitelist_result
-            
+
+        except SpotifyException as e:
+            if self._set_rate_limit_from_exception(e):
+                return False
+            print(f"Error checking device whitelist: {e}")
+            return False
         except Exception as e:
             print(f"Error checking device whitelist: {e}")
             return False
@@ -221,24 +234,51 @@ class SpotifyModule:
         if isinstance(device_whitelist, str):
             return [d.strip().strip("'\"") for d in device_whitelist.strip('[]').split(',')]
         return device_whitelist
-    
+
+    def _is_rate_limited(self) -> bool:
+        """True if we are in a rate-limit backoff and should not call the API."""
+        return time.time() < self._rate_limit_until
+
+    def _set_rate_limit_from_exception(self, e: Exception) -> bool:
+        """If e is a 429 SpotifyException, set backoff from Retry-After and return True."""
+        if not isinstance(e, SpotifyException) or e.http_status != 429:
+            return False
+        retry_after = self._RATE_LIMIT_DEFAULT_SECONDS
+        if getattr(e, "headers", None):
+            ra = e.headers.get("Retry-After")
+            if ra is not None:
+                try:
+                    retry_after = int(ra)
+                except (TypeError, ValueError):
+                    pass
+        self._rate_limit_until = time.time() + retry_after
+        print(f"Spotify rate limited. Pausing API requests for {retry_after} s until {time.ctime(self._rate_limit_until)}")
+        return True
+
     def get_current_playback(self) -> Optional[PlaybackInfo]:
         """Get current playback information from Spotify."""
         if self.invalid or not self.spotify:
             return None
-        
+        if self._is_rate_limited():
+            return None
+
         try:
             track = self.spotify.current_user_playing_track()
-            
+
             if not track or not self.is_device_whitelisted():
                 return None
-            
+
             playback_info = self._create_playback_info(track)
             self.is_playing = track['is_playing']
             self.queue.put(playback_info)
-            
+
             return playback_info
-            
+
+        except SpotifyException as e:
+            if self._set_rate_limit_from_exception(e):
+                return None
+            print(f"Error getting current playback: {e}")
+            return None
         except Exception as e:
             print(f"Error getting current playback: {e}")
             return None
