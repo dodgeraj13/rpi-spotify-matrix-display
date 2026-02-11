@@ -191,10 +191,11 @@ class SpotifyModule:
             
             devices = self.spotify.devices()
             whitelist = self._parse_device_whitelist(spotify_section['device_whitelist'])
-            
+            names = {d.strip() for d in whitelist}
+
             return any(
-                device['name'] in whitelist and device['is_active']
-                for device in devices['devices']
+                (device.get('name') or '').strip() in names and device.get('is_active', False)
+                for device in devices.get('devices', [])
             )
             
         except Exception as e:
