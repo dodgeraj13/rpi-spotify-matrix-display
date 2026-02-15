@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-spotify_module.py: Spotify API integration and authentication for the matrix display.
-"""
-
+"""Spotify API integration."""
 import os
 import time
 from dataclasses import dataclass
@@ -12,21 +9,11 @@ from typing import Optional
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
-
 from syrics.api import Spotify as SyricsSpotify
-
-@dataclass
-class SpotifyConfig:
-    """Configuration for Spotify API."""
-    client_id: str
-    client_secret: str
-    redirect_uri: str
-    sp_dc: Optional[str] = None
 
 
 @dataclass
 class PlaybackInfo:
-    """Information about current playback."""
     artist: Optional[str]
     title: Optional[str]
     art_url: Optional[str]
@@ -38,299 +25,127 @@ class PlaybackInfo:
 
 
 class SpotifyModule:
-    """Main Spotify integration module."""
-    
+
     def __init__(self, config):
         self.config = config
-        self.invalid = False
-        self.calls = 0
-        self.queue: LifoQueue = LifoQueue()
+        self.queue = LifoQueue()
         self.spotify: Optional[spotipy.Spotify] = None
-        self.auth_manager: Optional[SpotifyOAuth] = None
-        self.is_playing = False
-
         self.spl: Optional[SyricsSpotify] = None
-        self.last_track_id: Optional[str] = None
-        self.last_lyrics: Optional[str] = None
-        # Track which track we already retried lyrics for (after reinit) to avoid reinit loops
-        self._lyrics_retried_for_track: Optional[str] = None
+        self.last_track_id = None
+        self.last_lyrics = None
+        self.device_whitelist = self._parse_whitelist(config)
+        self.rate_limit_until = 0.0
+        
+        self._setup_spotify()
+        self._setup_syrics()
 
-        # Device whitelist check cache (avoid calling devices() every second)
-        self._device_whitelist_result: Optional[bool] = None
-        self._device_whitelist_cache_time: float = 0.0
-        self.DEVICE_CHECK_INTERVAL = 5  # seconds
-
-        # Rate limit: no requests until this time (seconds since epoch)
-        self._rate_limit_until: float = 0.0
-        self._RATE_LIMIT_DEFAULT_SECONDS = 3600  # when Retry-After is missing (e.g. after spotipy exhausts retries)
-
-        spotify_config = self._get_spotify_config()
-
-        self._setup_spotify(spotify_config)
-        self._setup_syrics(spotify_config)
-    
-    def _setup_spotify(self, spotify_config: SpotifyConfig):
-        """Setup Spotify authentication and client."""
+    def _setup_spotify(self):
         try:
-            if not spotify_config:
-                self.invalid = True
-                return
-            
-            os.environ["SPOTIPY_CLIENT_ID"] = spotify_config.client_id
-            os.environ["SPOTIPY_CLIENT_SECRET"] = spotify_config.client_secret
-            os.environ["SPOTIPY_REDIRECT_URI"] = spotify_config.redirect_uri
-            
-            self.auth_manager = SpotifyOAuth(
-                scope="user-read-currently-playing, user-read-playback-state",
-                open_browser=False
-            )
+            cfg = self.config['Spotify']
+            os.environ["SPOTIPY_CLIENT_ID"] = cfg['client_id']
+            os.environ["SPOTIPY_CLIENT_SECRET"] = cfg['client_secret']
+            os.environ["SPOTIPY_REDIRECT_URI"] = cfg['redirect_uri']
             
             self.spotify = spotipy.Spotify(
-                auth_manager=self.auth_manager,
+                auth_manager=SpotifyOAuth(
+                    scope="user-read-currently-playing, user-read-playback-state",
+                    open_browser=False
+                ),
                 requests_timeout=10
             )
-            
         except Exception as e:
-            print(f"Error setting up Spotify module: {e}")
-            self.invalid = True
-    
-    def _setup_syrics(self, spotify_config: SpotifyConfig):
-        """Setup SyricsSpotify for lyrics fetching."""
-        if spotify_config.sp_dc:
+            print(f"Spotify setup failed: {e}")
+
+    def _setup_syrics(self):
+        sp_dc = self.config.get('Spotify', 'sp_dc', fallback=None)
+        if sp_dc:
             try:
-                self.spl = SyricsSpotify(spotify_config.sp_dc)
-            except Exception as e:
-                print(f"Warning: Could not initialize SyricsSpotify: {e}")
+                self.spl = SyricsSpotify(sp_dc)
+            except Exception:
                 self.spl = None
-        else:
-            print("Warning: sp_dc not provided, lyrics fetching will be disabled")
-            self.spl = None
-
-    def _reinit_syrics(self) -> bool:
-        """Re-initialize SyricsSpotify (e.g. after token expiry). Returns True if successful."""
-        spotify_config = self._get_spotify_config()
-        if not spotify_config or not spotify_config.sp_dc:
-            return False
-        try:
-            self.spl = SyricsSpotify(spotify_config.sp_dc)
-            print("Lyrics client re-initialized (token/session refreshed).")
-            return True
-        except Exception as e:
-            print(f"Could not re-initialize lyrics client: {e}")
-            self.spl = None
-            return False
-
-    def _fetch_lyrics_with_retry(self, track_id: str):
-        """Fetch lyrics for track_id, re-initializing SyricsSpotify and retrying once on exception."""
-        if not self.spl:
-            return None
-        try:
-            result = self.spl.get_lyrics(track_id)
-            if result is not None:
-                self._lyrics_retried_for_track = None  # success; allow retry for next track
-            return result
-        except Exception as e:
-            print(f"Error fetching lyrics for track {track_id}: {e}")
-        # Retry once after re-initializing (handles expired token / stale session)
-        self._lyrics_retried_for_track = track_id  # avoid double reinit in _fetch_lyrics_with_retry_on_none
-        if self._reinit_syrics():
-            try:
-                result = self.spl.get_lyrics(track_id)
-                if result is not None:
-                    self._lyrics_retried_for_track = None
-                return result
-            except Exception as e2:
-                print(f"Error fetching lyrics after reinit: {e2}")
-        return None
-
-    def _fetch_lyrics_with_retry_on_none(self, track_id: str):
-        """Fetch lyrics; if first attempt returns None, reinit and retry once (handles 401->None)."""
-        first = self._fetch_lyrics_with_retry(track_id)
-        if first is not None:
-            return first
-        if self._lyrics_retried_for_track == track_id:
-            return None  # already retried for this track (exception path or previous None retry)
-        self._lyrics_retried_for_track = track_id
-        if self._reinit_syrics():
-            try:
-                result = self.spl.get_lyrics(track_id)
-                if result is not None:
-                    self._lyrics_retried_for_track = None
-                return result
-            except Exception as e:
-                print(f"Error fetching lyrics after reinit: {e}")
-        return None
-
-    def _get_spotify_config(self) -> Optional[SpotifyConfig]:
-        """Extract Spotify configuration from config parser."""
-        if not self.config or 'Spotify' not in self.config:
-            print("[Spotify Module] Missing Spotify configuration section")
-            return None
-        
-        spotify_section = self.config['Spotify']
-        required_fields = ['client_id', 'client_secret', 'redirect_uri']
-        
-        for field in required_fields:
-            if field not in spotify_section:
-                print(f"[Spotify Module] Missing required field: {field}")
-                return None
-            
-            value = spotify_section[field].strip()
-            if not value:
-                print(f"[Spotify Module] Empty value for field: {field}")
-                return None
-        
-        return SpotifyConfig(
-            client_id=spotify_section['client_id'],
-            client_secret=spotify_section['client_secret'],
-            redirect_uri=spotify_section['redirect_uri'],
-            sp_dc=spotify_section.get('sp_dc')
-        )
-    
-    def is_device_whitelisted(self) -> bool:
-        """Check if current device is in the whitelist. Skips devices() if no devices are whitelisted; otherwise caches result for 5 seconds."""
-        if not self.config or 'Spotify' not in self.config:
-            return True
-        
-        spotify_section = self.config['Spotify']
-        if 'device_whitelist' not in spotify_section:
-            return True
-        
-        whitelist = self._parse_device_whitelist(spotify_section['device_whitelist'])
-        names = {d.strip() for d in whitelist if d and d.strip()}
-        if not names:
-            return True  # No devices whitelisted = no restriction, skip devices() call
-
-        if self._is_rate_limited():
-            return False
-
-        try:
-            if not self.spotify:
-                return False
-
-            now = time.time()
-            if self._device_whitelist_result is not None and (now - self._device_whitelist_cache_time) < self.DEVICE_CHECK_INTERVAL:
-                return self._device_whitelist_result
-
-            devices = self.spotify.devices()
-            self._device_whitelist_result = any(
-                (device.get('name') or '').strip() in names and device.get('is_active', False)
-                for device in devices.get('devices', [])
-            )
-            self._device_whitelist_cache_time = now
-            return self._device_whitelist_result
-
-        except SpotifyException as e:
-            if self._set_rate_limit_from_exception(e):
-                return False
-            print(f"Error checking device whitelist: {e}")
-            return False
-        except Exception as e:
-            print(f"Error checking device whitelist: {e}")
-            return False
-    
-    def _parse_device_whitelist(self, device_whitelist):
-        """Parse device whitelist from config."""
-        if isinstance(device_whitelist, str):
-            return [d.strip().strip("'\"") for d in device_whitelist.strip('[]').split(',')]
-        return device_whitelist
-
-    def _is_rate_limited(self) -> bool:
-        """True if we are in a rate-limit backoff and should not call the API."""
-        return time.time() < self._rate_limit_until
-
-    def _set_rate_limit_from_exception(self, e: Exception) -> bool:
-        """If e is a 429 SpotifyException, set backoff from Retry-After and return True."""
-        if not isinstance(e, SpotifyException) or e.http_status != 429:
-            return False
-        retry_after = self._RATE_LIMIT_DEFAULT_SECONDS
-        if getattr(e, "headers", None):
-            ra = e.headers.get("Retry-After")
-            if ra is not None:
-                try:
-                    retry_after = int(ra)
-                except (TypeError, ValueError):
-                    pass
-        self._rate_limit_until = time.time() + retry_after
-        print(f"Spotify rate limited. Pausing API requests for {retry_after} s until {time.ctime(self._rate_limit_until)}")
-        return True
 
     def get_current_playback(self) -> Optional[PlaybackInfo]:
-        """Get current playback information from Spotify."""
-        if self.invalid or not self.spotify:
-            return None
-        if self._is_rate_limited():
+        if not self.spotify or time.time() < self.rate_limit_until:
             return None
 
         try:
             track = self.spotify.current_user_playing_track()
-
-            if not track or not self.is_device_whitelisted():
+            if not track or not self._is_whitelisted_device():
                 return None
 
-            playback_info = self._create_playback_info(track)
-            self.is_playing = track['is_playing']
-            self.queue.put(playback_info)
-
-            return playback_info
+            info = self._process_track(track)
+            self.queue.put(info)
+            return info
 
         except SpotifyException as e:
-            if self._set_rate_limit_from_exception(e):
-                return None
-            print(f"Error getting current playback: {e}")
+            self._handle_rate_limit(e)
             return None
         except Exception as e:
-            print(f"Error getting current playback: {e}")
+            # print(f"Error getting playback: {e}")
             return None
-    
-    def _create_playback_info(self, track) -> PlaybackInfo:
-        """Create PlaybackInfo from Spotify track data."""
-        if track['item'] is None:
-            return PlaybackInfo(
-                artist=None,
-                title=None,
-                art_url=None,
-                is_playing=track['is_playing'],
-                progress_ms=track.get('progress_ms', 0),
-                duration_ms=0,
-                lyrics=None,
-                track_id=None
-            )
-        
-        artist = self._format_artist_names(track['item']['artists'])
-        title = track['item']['name']
-        art_url = self._get_album_art_url(track['item']['album'])
-        
-        track_id = track['item']['id'] if track['item'] else None
-        lyrics = None
-        
-        # Fetch lyrics if we have a SyricsSpotify instance and a new track
-        if self.spl and track_id:
-            if track_id != self.last_track_id:
-                lyrics_result = self._fetch_lyrics_with_retry_on_none(track_id)
-                self.last_lyrics = lyrics_result
-                self.last_track_id = track_id
-            lyrics = self.last_lyrics
+
+    def _process_track(self, track) -> PlaybackInfo:
+        item = track['item']
+        if not item:
+             return PlaybackInfo(None, None, None, track['is_playing'], track.get('progress_ms', 0), 0)
+
+        # Simplify: Assume proper song structure
+        artists = item['artists']
+        artist_text = artists[0]['name']
+        if len(artists) > 1:
+            artist_text += f", {artists[1]['name']}"
+            
+        images = item['album']['images']
+        art_url = images[0]['url'] if images else None
         
         return PlaybackInfo(
-            artist=artist,
-            title=title,
+            artist=artist_text,
+            title=item['name'],
             art_url=art_url,
             is_playing=track['is_playing'],
             progress_ms=track.get('progress_ms', 0),
-            duration_ms=track['item'].get('duration_ms', 0),
-            lyrics=lyrics,
-            track_id=track_id
+            duration_ms=item.get('duration_ms', 0),
+            lyrics=self._get_lyrics(item['id']),
+            track_id=item['id']
         )
-    
-    def _format_artist_names(self, artists):
-        """Format artist names for display."""
-        if len(artists) >= 2:
-            return f"{artists[0]['name']}, {artists[1]['name']}"
-        return artists[0]['name']
-    
-    def _get_album_art_url(self, album):
-        """Extract album art URL from album data."""
-        if album['images']:
-            return album['images'][0]['url']
-        return None
+
+    def _get_lyrics(self, track_id: str) -> Optional[dict]:
+        if not self.spl or not track_id:
+            return None
+            
+        if track_id != self.last_track_id:
+            try:
+                self.last_lyrics = self.spl.get_lyrics(track_id)
+            except Exception:
+                self._setup_syrics()
+                try:
+                    self.last_lyrics = self.spl.get_lyrics(track_id)
+                except Exception:
+                    self.last_lyrics = None
+            self.last_track_id = track_id
+            
+        return self.last_lyrics
+
+    def _is_whitelisted_device(self) -> bool:
+        if not self.device_whitelist:
+            return True
+        try:
+             devices = self.spotify.devices()
+             for d in devices.get('devices', []):
+                 if d.get('is_active') and d.get('name') in self.device_whitelist:
+                     return True
+             return False
+        except Exception:
+            return False
+
+    def _parse_whitelist(self, config):
+        if 'Spotify' not in config: return []
+        if 'device_whitelist' not in config['Spotify']: return []
+        wl = config['Spotify']['device_whitelist']
+        return [x.strip().strip("'") for x in wl.strip("[]").split(',')] if isinstance(wl, str) else wl
+
+    def _handle_rate_limit(self, e: SpotifyException):
+        if e.http_status == 429:
+            retry = int(e.headers.get("Retry-After", 30))
+            self.rate_limit_until = time.time() + retry
+            print(f"Rate limited. Pausing for {retry}s")
