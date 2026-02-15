@@ -62,10 +62,7 @@ class SpotifyPlayer:
         time.sleep(3)
         while True:
             try:
-                self.response = self.spotify_module.get_current_playback()
-                if self.response:
-                    self.response_timestamp = time.time()
-                    self.response_progress_ms = self.response.progress_ms
+                self.spotify_module.get_current_playback()
                 time.sleep(self.fetch_interval)
             except Exception as e:
                 print(f"Error fetching Spotify data: {e}")
