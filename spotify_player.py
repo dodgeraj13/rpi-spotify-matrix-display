@@ -41,6 +41,7 @@ class SpotifyPlayer:
         self.artist_animation_cnt = 0
         self.last_title_reset = self.last_artist_reset = math.floor(time.time())
         self.is_playing = False
+        self.playback_start_time = 0.0
         self.last_active_time = math.floor(time.time())
         self.response: Optional[PlaybackInfo] = None
         self.response_timestamp = 0.0
@@ -86,7 +87,10 @@ class SpotifyPlayer:
             return self.black_screen
 
         if response.is_playing:
+            if not self.is_playing:
+                self.playback_start_time = time.time()
             self.last_active_time = math.floor(time.time())
+        self.is_playing = response.is_playing
         
         if not response.is_playing:
             if math.floor(time.time()) - self.last_active_time > self.shutdown_delay:
@@ -254,10 +258,10 @@ class SpotifyPlayer:
             draw.rectangle((0, 62, min(w, 63), 63), fill=GREEN)
 
     def _draw_play_pause(self, draw: ImageDraw.Draw, x: int, y: int, is_playing: bool):
-        if is_playing:
+        if not is_playing:
             draw.line([(x, y), (x, y + 6)], fill=GREEN, width=2)
             draw.line([(x + 3, y), (x + 3, y + 6)], fill=GREEN, width=2)
-        else:
+        elif time.time() - self.playback_start_time < 3.0:
             draw.polygon([(x, y), (x, y + 6), (x + 4, y + 3)], fill=GREEN)
 
     def _draw_lyrics(self, frame: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int):
