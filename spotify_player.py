@@ -180,11 +180,15 @@ class SpotifyPlayer:
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        self._draw_text(draw, self.current_title, 1, 1, W - 12, is_title=True)
-        self._draw_text(draw, self.current_artist, 1, 7, W - 12, is_title=False)
+        show_button = not response.is_playing or time.time() - self.playback_start_time < 3.0
+        text_width = W - 12 if show_button else W - 2
 
-        draw.rectangle((W - 12, 0, W - 1, 12), fill=(0, 0, 0))
-        self._draw_play_pause(draw, W - 9, 3, is_playing=response.is_playing)
+        self._draw_text(draw, self.current_title, 1, 1, text_width, is_title=True)
+        self._draw_text(draw, self.current_artist, 1, 7, text_width, is_title=False)
+
+        if show_button:
+            draw.rectangle((text_width, 0, W - 1, 12), fill=(0, 0, 0))
+            self._draw_play_pause(draw, W - 9, 3, is_playing=response.is_playing)
 
         if self.current_art_img:
             if self.current_art_img.size != (48, 48):
