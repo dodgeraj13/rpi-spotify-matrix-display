@@ -40,7 +40,7 @@ class SpotifyPlayer:
         self.title_animation_cnt = 0
         self.artist_animation_cnt = 0
         self.last_title_reset = self.last_artist_reset = math.floor(time.time())
-        self.is_playing = False
+        self.is_playing = None
         self.playback_start_time = 0.0
         self.last_active_time = math.floor(time.time())
         self.response: Optional[PlaybackInfo] = None
@@ -87,7 +87,7 @@ class SpotifyPlayer:
             return self.black_screen
 
         if response.is_playing:
-            if not self.is_playing:
+            if self.is_playing is False:
                 self.playback_start_time = time.time()
             self.last_active_time = math.floor(time.time())
         self.is_playing = response.is_playing
@@ -123,19 +123,20 @@ class SpotifyPlayer:
         return target_frame
 
     def _handle_track_change(self, new_track_id: str):
-        self.slide_active = True
-        self.slide_frames = 0
-        self.prev_frame_snapshot = self.last_generated_frame or self.black_screen.copy()
-        
-        self.slide_direction = 1
-        if new_track_id in self.track_history:
-             try:
-                 old_i = self.track_history.index(self.current_track_id) if self.current_track_id in self.track_history else -1
-                 new_i = self.track_history.index(new_track_id)
-                 if old_i != -1 and new_i < old_i:
-                     self.slide_direction = -1
-             except ValueError:
-                 pass
+        if self.current_track_id is not None:
+            self.slide_active = True
+            self.slide_frames = 0
+            self.prev_frame_snapshot = self.last_generated_frame or self.black_screen.copy()
+            
+            self.slide_direction = 1
+            if new_track_id in self.track_history:
+                 try:
+                     old_i = self.track_history.index(self.current_track_id) if self.current_track_id in self.track_history else -1
+                     new_i = self.track_history.index(new_track_id)
+                     if old_i != -1 and new_i < old_i:
+                         self.slide_direction = -1
+                 except ValueError:
+                     pass
         
         self.current_track_id = new_track_id
         if new_track_id not in self.track_history:
