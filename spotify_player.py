@@ -58,7 +58,7 @@ class SpotifyPlayer:
         self.last_generated_frame: Optional[Image.Image] = None
 
         self.lyrics_transition_frames = 0
-        self.max_lyrics_transition_frames = 10
+        self.max_lyrics_transition_frames = 16
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -210,11 +210,14 @@ class SpotifyPlayer:
             if getattr(self, 'lyrics_transition_frames', 0) > 0:
                 self.lyrics_transition_frames -= 1
 
-        progress = getattr(self, 'lyrics_transition_frames', 0) / getattr(self, 'max_lyrics_transition_frames', 10)
+        progress = getattr(self, 'lyrics_transition_frames', 0) / getattr(self, 'max_lyrics_transition_frames', 16)
+
+        p_scale = min(1.0, progress * 2.0)
+        p_move = max(0.0, (progress - 0.5) * 2.0)
 
         if self.current_art_img:
-            size = int(48 - (24 * progress))
-            x = int(8 - (7 * progress))
+            size = int(48 - (24 * p_scale))
+            x = int(8 - (7 * p_move))
             if self.current_art_img.size != (size, size):
                 img.paste(self.current_art_img.resize((size, size), Image.LANCZOS), (x, 14))
             else:
