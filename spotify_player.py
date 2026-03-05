@@ -196,7 +196,7 @@ class SpotifyPlayer:
         has_lyrics = False
         if response.is_playing and response.lyrics and response.lyrics.get('lyrics', {}).get('lines'):
             for line in response.lyrics['lyrics']['lines']:
-                if int(line['startTimeMs']) <= progress_ms + 600:
+                if int(line['startTimeMs']) <= progress_ms + 1000:
                     w = line['words'].strip()
                     if w:
                         has_lyrics = (w != "♪")
@@ -218,15 +218,24 @@ class SpotifyPlayer:
         if self.current_art_img:
             size = int(48 - (24 * p_scale))
             x = int(8 - (7 * p_move))
-            if self.current_art_img.size != (size, size):
-                img.paste(self.current_art_img.resize((size, size), Image.LANCZOS), (x, 14))
-            else:
-                img.paste(self.current_art_img, (x, 14))
+            f = getattr(self, 'lyrics_transition_frames', 0)
+            y = 14 + min(f, 3)
+            
+            art = self.current_art_img
+            if art.size != (size, size):
+                art = art.resize((size, size), Image.LANCZOS)
+                
+            img.paste(art, (x, y))
 
         if has_lyrics and progress >= 1.0:
             self._draw_lyrics(img, draw, response.lyrics, progress_ms)
 
-        self._draw_progress_bar(draw, progress_ms, duration_ms)
+        if progress > 0:
+            self._draw_progress_bar(draw, progress_ms, duration_ms, x=0, y=14, top_transition=progress)
+
+        bottom_y = 62 + int(progress * 4)
+        if bottom_y < 64:
+            self._draw_progress_bar(draw, progress_ms, duration_ms, x=0, y=bottom_y)
 
         return img
 
@@ -282,11 +291,23 @@ class SpotifyPlayer:
         else:
             draw.text((x, y), text, WHITE, font=self.font)
 
-    def _draw_progress_bar(self, draw: ImageDraw.Draw, progress_ms: int, duration_ms: int):
-        draw.rectangle((0, 62, 63, 63), fill=(100, 100, 100))
-        if duration_ms > 0:
-            w = round(64 * progress_ms / duration_ms)
-            draw.rectangle((0, 62, min(w, 63), 63), fill=GREEN)
+    def _draw_progress_bar(self, draw: ImageDraw.Draw, progress_ms: int, duration_ms: int, x: int = 0, y: int = 62, top_transition: float = -1.0):
+        if top_transition >= 0.0:
+            green_p = min(1.0, top_transition * 2.0)
+            gray_p = max(0.0, (top_transition - 0.5) * 2.0)
+            gray_color = int(100 * gray_p)
+            draw.rectangle((x, y, x + 63, y + 1), fill=(gray_color, gray_color, gray_color))
+            if duration_ms > 0:
+                w = round(64 * progress_ms / duration_ms)
+                current_w = int(w * green_p)
+                if current_w > 0:
+                    draw.rectangle((x, y, x + min(current_w, 63), y + 1), fill=GREEN)
+        else:
+            draw.rectangle((x, y, x + 63, y + 1), fill=(100, 100, 100))
+            if duration_ms > 0:
+                w = round(64 * progress_ms / duration_ms)
+                if w > 0:
+                    draw.rectangle((x, y, x + min(w, 63), y + 1), fill=GREEN)
 
     def _draw_play_pause(self, draw: ImageDraw.Draw, x: int, y: int, is_playing: bool):
         if not is_playing:
@@ -358,4 +379,4 @@ class SpotifyPlayer:
 
         for line_idx, line_str in enumerate(out):
             start_x = 27 if line_idx < 4 else 2
-            draw.text((start_x, line_idx * line_h + 15), line_str, fill=WHITE, font=self.font)
+            draw.text((start_x, line_idx * line_h + 18), line_str, fill=WHITE, font=self.font)
