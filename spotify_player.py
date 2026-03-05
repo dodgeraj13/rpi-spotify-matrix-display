@@ -57,6 +57,9 @@ class SpotifyPlayer:
         self.prev_frame_snapshot: Optional[Image.Image] = None
         self.last_generated_frame: Optional[Image.Image] = None
 
+        self.lyrics_transition_frames = 0
+        self.max_lyrics_transition_frames = 10
+
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     def _fetch_loop(self):
@@ -126,6 +129,7 @@ class SpotifyPlayer:
         if self.current_track_id is not None:
             self.slide_active = True
             self.slide_frames = 0
+            self.lyrics_transition_frames = 0
             self.prev_frame_snapshot = self.last_generated_frame or self.black_screen.copy()
             
             self.slide_direction = 1
@@ -181,23 +185,42 @@ class SpotifyPlayer:
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        show_button = not response.is_playing or time.time() - self.playback_start_time < 3.0
-        text_width = W - 12 if show_button else W - 2
+        text_width = W - 12
 
         self._draw_text(draw, self.current_title, 1, 1, text_width, is_title=True)
         self._draw_text(draw, self.current_artist, 1, 7, text_width, is_title=False)
 
-        if show_button:
-            draw.rectangle((text_width, 0, W - 1, 12), fill=(0, 0, 0))
-            self._draw_play_pause(draw, W - 9, 3, is_playing=response.is_playing)
+        draw.rectangle((text_width, 0, W - 1, 12), fill=(0, 0, 0))
+        self._draw_play_pause(draw, W - 9, 3, is_playing=response.is_playing)
+
+        has_lyrics = False
+        if response.is_playing and response.lyrics and response.lyrics.get('lyrics', {}).get('lines'):
+            for line in response.lyrics['lyrics']['lines']:
+                if int(line['startTimeMs']) <= progress_ms + 600:
+                    w = line['words'].strip()
+                    if w:
+                        has_lyrics = (w != "♪")
+                else:
+                    break
+
+        if has_lyrics:
+            if getattr(self, 'lyrics_transition_frames', 0) < getattr(self, 'max_lyrics_transition_frames', 10):
+                self.lyrics_transition_frames = getattr(self, 'lyrics_transition_frames', 0) + 1
+        else:
+            if getattr(self, 'lyrics_transition_frames', 0) > 0:
+                self.lyrics_transition_frames -= 1
+
+        progress = getattr(self, 'lyrics_transition_frames', 0) / getattr(self, 'max_lyrics_transition_frames', 10)
 
         if self.current_art_img:
-            if self.current_art_img.size != (48, 48):
-                 img.paste(self.current_art_img.resize((48, 48), Image.LANCZOS), (8, 14))
+            size = int(48 - (24 * progress))
+            x = int(8 - (7 * progress))
+            if self.current_art_img.size != (size, size):
+                img.paste(self.current_art_img.resize((size, size), Image.LANCZOS), (x, 14))
             else:
-                 img.paste(self.current_art_img, (8, 14))
+                img.paste(self.current_art_img, (x, 14))
 
-        if response.is_playing and response.lyrics and response.lyrics.get('lyrics', {}).get('lines'):
+        if has_lyrics and progress >= 1.0:
             self._draw_lyrics(img, draw, response.lyrics, progress_ms)
 
         self._draw_progress_bar(draw, progress_ms, duration_ms)
@@ -266,7 +289,7 @@ class SpotifyPlayer:
         if not is_playing:
             draw.line([(x, y), (x, y + 6)], fill=GREEN, width=2)
             draw.line([(x + 3, y), (x + 3, y + 6)], fill=GREEN, width=2)
-        elif time.time() - self.playback_start_time < 3.0:
+        else:
             draw.polygon([(x, y), (x, y + 6), (x + 4, y + 3)], fill=GREEN)
 
     def _draw_lyrics(self, frame: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int):
@@ -283,30 +306,53 @@ class SpotifyPlayer:
         if not current_line or current_line == "♪":
             return
 
-        max_w = W - 6
         words = current_line.split()
-        out, cur, max_lines = [], "", 7
-        for i, word in enumerate(words):
-            test = f"{cur} {word}".strip() if cur else word
+        out = []
+        cur = ""
+        max_lines = 8
+        line_h = 6
+        
+        word_idx = 0
+        while word_idx < len(words):
+            current_line_idx = len(out)
+            max_w = (W - 27) if current_line_idx < 4 else (W - 4)
+            
+            word_str = words[word_idx]
+            test = f"{cur} {word_str}".strip() if cur else word_str
+            
             if self.font.getlength(test) <= max_w:
                 cur = test
+                word_idx += 1
             else:
                 if cur:
+                    if len(out) >= max_lines - 1:
+                        break
                     out.append(cur)
-                cur = word
-                if len(out) >= max_lines - 1 and i < len(words) - 1:
-                    while cur and self.font.getlength(cur + "..") > max_w:
-                        cur = cur.rsplit(" ", 1)[0]
-                    cur = (cur + "..").strip() if cur else ""
-                    break
-        if cur:
+                    cur = ""
+                else:
+                    if len(out) >= max_lines - 1:
+                        break
+                    prefix = ""
+                    for j in range(1, len(word_str)):
+                        if self.font.getlength(word_str[:j] + "-") <= max_w:
+                            prefix = word_str[:j]
+                        else:
+                            break
+                    if not prefix:
+                        prefix = word_str[0]
+                    out.append(prefix + "-")
+                    words[word_idx] = word_str[len(prefix):]
+
+        if word_idx < len(words):
+            current_line_idx = len(out)
+            max_w = (W - 27) if current_line_idx < 4 else (W - 4)
+            remainder = f"{cur} {words[word_idx]}".strip() if cur else words[word_idx]
+            while remainder and self.font.getlength(remainder + "..") > max_w:
+                remainder = remainder[:-1]
+            out.append((remainder + "..").strip() if remainder else "..")
+        elif cur:
             out.append(cur)
 
-        line_h, total = 6, len(out) * 6
-        y0 = 14 + (48 - total) // 2
-        overlay = Image.new("RGBA", (64, 48), (0, 0, 0, 150))
-        frame.paste(overlay, (0, 14), overlay)
-
-        for i, line in enumerate(out):
-            x = (W - self.font.getlength(line)) // 2
-            draw.text((x, y0 + i * line_h), line, fill=WHITE, font=self.font)
+        for line_idx, line_str in enumerate(out):
+            start_x = 27 if line_idx < 4 else 2
+            draw.text((start_x, line_idx * line_h + 15), line_str, fill=WHITE, font=self.font)
