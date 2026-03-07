@@ -9,7 +9,7 @@ from typing import Optional
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
-from syrics.api import Spotify as SyricsSpotify
+from librelyrics import LibreLyrics
 
 
 @dataclass
@@ -30,14 +30,14 @@ class SpotifyModule:
         self.config = config
         self.queue = LifoQueue()
         self.spotify: Optional[spotipy.Spotify] = None
-        self.spl: Optional[SyricsSpotify] = None
+        self.ll: Optional[LibreLyrics] = None
         self.last_track_id = None
         self.last_lyrics = None
         self.device_whitelist = self._parse_whitelist(config)
         self.rate_limit_until = 0.0
         
         self._setup_spotify()
-        self._setup_syrics()
+        self._setup_librelyrics()
 
     def _setup_spotify(self):
         try:
@@ -56,13 +56,17 @@ class SpotifyModule:
         except Exception as e:
             print(f"Spotify setup failed: {e}")
 
-    def _setup_syrics(self):
+    def _setup_librelyrics(self):
         sp_dc = self.config.get('Spotify', 'sp_dc', fallback=None)
         if sp_dc:
             try:
-                self.spl = SyricsSpotify(sp_dc)
-            except Exception:
-                self.spl = None
+                self.ll = LibreLyrics(config={'plugins': {'spotify': {'sp_dc': sp_dc}}})
+                print("LibreLyrics initialized successfully")
+            except Exception as e:
+                print(f"LibreLyrics setup failed: {e}")
+                import traceback
+                traceback.print_exc()
+                self.ll = None
 
     def get_current_playback(self) -> Optional[PlaybackInfo]:
         if not self.spotify or time.time() < self.rate_limit_until:
@@ -110,17 +114,31 @@ class SpotifyModule:
         )
 
     def _get_lyrics(self, track_id: str) -> Optional[dict]:
-        if not self.spl or not track_id:
+        if not self.ll or not track_id:
             return None
             
         if track_id != self.last_track_id:
+            def fetch_lyrics() -> Optional[dict]:
+                res = self.ll.fetch(f"https://open.spotify.com/track/{track_id}")
+                lines = []
+                for line in res.lyrics:
+                    lines.append({
+                        'startTimeMs': line.start_ms if line.start_ms is not None else 0,
+                        'words': line.text
+                    })
+                return {'lyrics': {'lines': lines}}
+                
             try:
-                self.last_lyrics = self.spl.get_lyrics(track_id)
-            except Exception:
-                self._setup_syrics()
+                self.last_lyrics = fetch_lyrics()
+            except Exception as e:
+                print(f"fetch_lyrics failed for {track_id}: {e}")
+                import traceback
+                traceback.print_exc()
+                self._setup_librelyrics()
                 try:
-                    self.last_lyrics = self.spl.get_lyrics(track_id)
-                except Exception:
+                    self.last_lyrics = fetch_lyrics()
+                except Exception as e2:
+                    print(f"fetch_lyrics retry failed: {e2}")
                     self.last_lyrics = None
             self.last_track_id = track_id
             
