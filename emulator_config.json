@@ -16,7 +16,8 @@
         "quality": 70,
         "image_border": true,
         "debug_text": false,
-        "image_format": "JPEG"
+        "image_format": "JPEG",
+        "open_immediately": false
     },
     "pi5": {
         "_comment": "For use with the pi5 adapter only.",
