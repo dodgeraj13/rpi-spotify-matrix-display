@@ -60,6 +60,9 @@ class SpotifyPlayer:
         self.lyrics_transition_frames = 0
         self.max_lyrics_transition_frames = 16
 
+        self.last_is_playing_state = None
+        self.play_show_time = 0.0
+
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     def _fetch_loop(self):
@@ -89,10 +92,13 @@ class SpotifyPlayer:
         if not response:
             return self.black_screen
 
+        if response.is_playing != self.last_is_playing_state:
+            self.play_show_time = time.time()
+        
         if response.is_playing:
-            if self.is_playing is False:
-                self.playback_start_time = time.time()
             self.last_active_time = math.floor(time.time())
+        
+        self.last_is_playing_state = response.is_playing
         self.is_playing = response.is_playing
         
         if not response.is_playing:
@@ -178,64 +184,84 @@ class SpotifyPlayer:
 
         draw = ImageDraw.Draw(img)
         self._draw_progress_bar(draw, progress_ms, duration_ms)
-
         return img
 
     def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int) -> Image.Image:
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        text_width = W - 12
-
-        self._draw_text(draw, self.current_title, 1, 1, text_width, is_title=True)
-        self._draw_text(draw, self.current_artist, 1, 7, text_width, is_title=False)
-
-        draw.rectangle((text_width, 0, W - 1, 12), fill=(0, 0, 0))
-        self._draw_play_pause(draw, W - 9, 3, is_playing=response.is_playing)
-
-        has_lyrics = False
-        if response.is_playing and response.lyrics and response.lyrics.get('lyrics', {}).get('lines'):
+        # 0. Check for active lyrics to drive transition (unchanged logic)
+        has_lyrics_now = False
+        if response.lyrics and response.lyrics.get('lyrics', {}).get('lines'):
             for line in response.lyrics['lyrics']['lines']:
-                if int(line['startTimeMs']) <= progress_ms + 1000:
+                if int(line['startTimeMs']) <= progress_ms + 500:
                     w = line['words'].strip()
-                    if w:
-                        has_lyrics = (w != "♪")
-                else:
-                    break
+                    if w and w != "♪":
+                        has_lyrics_now = True
+                else: break
 
-        if has_lyrics:
-            if getattr(self, 'lyrics_transition_frames', 0) < getattr(self, 'max_lyrics_transition_frames', 10):
-                self.lyrics_transition_frames = getattr(self, 'lyrics_transition_frames', 0) + 1
+        if has_lyrics_now:
+            if self.lyrics_transition_frames < self.max_lyrics_transition_frames:
+                self.lyrics_transition_frames += 1
         else:
-            if getattr(self, 'lyrics_transition_frames', 0) > 0:
+            if self.lyrics_transition_frames > 0:
                 self.lyrics_transition_frames -= 1
 
-        progress = getattr(self, 'lyrics_transition_frames', 0) / getattr(self, 'max_lyrics_transition_frames', 16)
+        t_progress = self.lyrics_transition_frames / self.max_lyrics_transition_frames
+        
+        # 1. Title & Artist (scrolling)
+        # No lyrics: x=1, width=W-2. Lyrics: x=18, width=W-19
+        text_x = int(1 + (17 * t_progress))
+        text_width = W - text_x - 1 # 1px padding from right
+        
+        # synchronized scroll update
+        self._update_scroll_animation(text_width)
+        
+        # y positions: 1px from top, 1px gap
+        self._draw_text(draw, self.current_title, text_x, 1, text_width, is_title=True)
+        self._draw_text(draw, self.current_artist, text_x, 7, text_width, is_title=False)
 
-        p_scale = min(1.0, progress * 2.0)
-        p_move = max(0.0, (progress - 0.5) * 2.0)
+        # 2. Progress Bar
+        # No lyrics: y=62, full 64px width. Lyrics: y=13, right of art.
+        if t_progress < 1.0:
+            # Main bottom bar at the very bottom (62-63)
+            bar_y = 62 + int(t_progress * 2)
+            if bar_y < 64:
+                # x=0 for full width 64px
+                self._draw_progress_bar(draw, progress_ms, duration_ms, x=0, y=bar_y)
+        
+        if t_progress > 0:
+            if t_progress >= 0.8:
+                self._draw_progress_bar(draw, progress_ms, duration_ms, x=text_x, y=14, width=text_width)
+
+        # 3. CLIP and Art
+        # CLIP LEFT: Prevent scrolling behind art
+        if t_progress > 0.5:
+             draw.rectangle((0, 0, text_x - 1, 16), fill=(0, 0, 0))
+        
+        # CLIP RIGHT: 1px padding
+        draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
 
         if self.current_art_img:
-            size = int(48 - (24 * p_scale))
-            x = int(8 - (7 * p_move))
-            f = getattr(self, 'lyrics_transition_frames', 0)
-            y = 14 + min(f, 3)
+            # No lyrics: 48x48 at (8, 14) [ends at 62]. Lyrics: 15x15 at (1, 1) [ends at 16].
+            art_size = int(48 - (33 * t_progress))
+            art_x = int(8 - (7 * t_progress))
+            art_y = int(14 - (13 * t_progress))
             
-            art = self.current_art_img
-            if art.size != (size, size):
-                art = art.resize((size, size), Image.LANCZOS)
-                
-            img.paste(art, (x, y))
+            art = self.current_art_img.resize((art_size, art_size), Image.LANCZOS)
+            img.paste(art, (art_x, art_y))
 
-        if has_lyrics and progress >= 1.0:
-            self._draw_lyrics(img, draw, response.lyrics, progress_ms)
+        # 4. Play indicator - centered on artwork
+        show_play = (time.time() - self.play_show_time) < 3.0
+        if show_play:
+            # Full 48x48 center: (30, 35). Thumbnail 16x16 center: (6, 5).
+            play_x = int(30 - (24 * t_progress))
+            play_y = int(35 - (30 * t_progress))
+            self._draw_play_pause(draw, play_x, play_y, is_playing=response.is_playing)
 
-        if progress > 0:
-            self._draw_progress_bar(draw, progress_ms, duration_ms, x=0, y=14, top_transition=progress)
-
-        bottom_y = 62 + int(progress * 4)
-        if bottom_y < 64:
-            self._draw_progress_bar(draw, progress_ms, duration_ms, x=0, y=bottom_y)
+        # 5. Lyrics
+        if t_progress >= 1.0 and has_lyrics_now:
+            self._draw_lyrics(img, draw, response.lyrics, progress_ms, y_offset=18)
 
         return img
 
@@ -262,52 +288,54 @@ class SpotifyPlayer:
             print(f"Error fetching image {url}: {e}")
             return None
 
+    def _update_scroll_animation(self, width: int):
+        spacer = "     "
+        t = math.floor(time.time())
+
+        # Determine if we even need to scroll and what the limits are
+        title_p_width = self.font.getlength(self.current_title or "Unknown Title")
+        artist_p_width = self.font.getlength(self.current_artist or "Unknown Artist")
+
+        title_limit = self.font.getlength((self.current_title or "Unknown Title") + spacer) if title_p_width > width else 0
+        artist_limit = self.font.getlength((self.current_artist or "Unknown Artist") + spacer) if artist_p_width > width else 0
+
+        # Only proceed if the wait delay has passed
+        if t - self.last_title_reset >= self.scroll_delay:
+            # Increment title if needed and not at limit
+            if title_limit > 0 and self.title_animation_cnt < title_limit:
+                self.title_animation_cnt += 1
+            
+            # Increment artist if needed and not at limit
+            if artist_limit > 0 and self.artist_animation_cnt < artist_limit:
+                self.artist_animation_cnt += 1
+
+            # Reset both ONLY after they both "finished" (reached limit or didn't need to scroll)
+            title_done = (title_limit == 0 or self.title_animation_cnt >= title_limit)
+            artist_done = (artist_limit == 0 or self.artist_animation_cnt >= artist_limit)
+
+            if title_done and artist_done:
+                self.title_animation_cnt = 0
+                self.artist_animation_cnt = 0
+                self.last_title_reset = t
+
     def _draw_text(self, draw: ImageDraw.Draw, text: str, x: int, y: int, width: int, is_title: bool):
         text = text or ("Unknown Title" if is_title else "Unknown Artist")
         spacer = "     "
-
         pixel_width = self.font.getlength(text)
 
         if pixel_width > width:
             animation_cnt = self.title_animation_cnt if is_title else self.artist_animation_cnt
             draw.text((x - animation_cnt, y), text + spacer + text, WHITE, font=self.font)
-
-            t = math.floor(time.time())
-            last_reset = self.last_title_reset if is_title else self.last_artist_reset
-
-            if t - last_reset >= self.scroll_delay:
-                if is_title:
-                    self.title_animation_cnt += 1
-                else:
-                    self.artist_animation_cnt += 1
-
-            if animation_cnt >= self.font.getlength(text + spacer):
-                if is_title:
-                    self.title_animation_cnt = 0
-                    self.last_title_reset = t
-                else:
-                    self.artist_animation_cnt = 0
-                    self.last_artist_reset = t
         else:
             draw.text((x, y), text, WHITE, font=self.font)
 
-    def _draw_progress_bar(self, draw: ImageDraw.Draw, progress_ms: int, duration_ms: int, x: int = 0, y: int = 62, top_transition: float = -1.0):
-        if top_transition >= 0.0:
-            green_p = min(1.0, top_transition * 2.0)
-            gray_p = max(0.0, (top_transition - 0.5) * 2.0)
-            gray_color = int(100 * gray_p)
-            draw.rectangle((x, y, x + 63, y + 1), fill=(gray_color, gray_color, gray_color))
-            if duration_ms > 0:
-                w = round(64 * progress_ms / duration_ms)
-                current_w = int(w * green_p)
-                if current_w > 0:
-                    draw.rectangle((x, y, x + min(current_w, 63), y + 1), fill=GREEN)
-        else:
-            draw.rectangle((x, y, x + 63, y + 1), fill=(100, 100, 100))
-            if duration_ms > 0:
-                w = round(64 * progress_ms / duration_ms)
-                if w > 0:
-                    draw.rectangle((x, y, x + min(w, 63), y + 1), fill=GREEN)
+    def _draw_progress_bar(self, draw: ImageDraw.Draw, progress_ms: int, duration_ms: int, x: int = 1, y: int = 20, width: int = -1):
+        bar_width = width if width > 0 else (W - (x * 2))
+        draw.rectangle((x, y, x + bar_width - 1, y + 1), fill=(100, 100, 100))
+        if duration_ms > 0:
+            w = round(bar_width * progress_ms / duration_ms)
+            if w > 0:
+                draw.rectangle((x, y, x + min(w, bar_width) - 1, y + 1), fill=GREEN)
 
     def _draw_play_pause(self, draw: ImageDraw.Draw, x: int, y: int, is_playing: bool):
         if not is_playing:
@@ -316,14 +344,14 @@ class SpotifyPlayer:
         else:
             draw.polygon([(x, y), (x, y + 6), (x + 4, y + 3)], fill=GREEN)
 
-    def _draw_lyrics(self, frame: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int):
+    def _draw_lyrics(self, img: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int, y_offset: int = 24):
         lines = lyrics['lyrics']['lines']
         current_line = None
         for line in lines:
             if int(line['startTimeMs']) <= progress_ms:
-                w = line['words'].strip()
-                if w:
-                    current_line = w
+                text = line['words'].strip()
+                if text:
+                    current_line = text
             else:
                 break
 
@@ -333,50 +361,26 @@ class SpotifyPlayer:
         words = current_line.split()
         out = []
         cur = ""
-        max_lines = 8
-        line_h = 6
+        max_w = W - 2  # 1px padding on each side
         
-        word_idx = 0
-        while word_idx < len(words):
-            current_line_idx = len(out)
-            max_w = (W - 27) if current_line_idx < 4 else (W - 4)
-            
-            word_str = words[word_idx]
-            test = f"{cur} {word_str}".strip() if cur else word_str
-            
+        for word in words:
+            test = f"{cur} {word}".strip() if cur else word
             if self.font.getlength(test) <= max_w:
                 cur = test
-                word_idx += 1
             else:
                 if cur:
-                    if len(out) >= max_lines - 1:
-                        break
                     out.append(cur)
-                    cur = ""
+                    cur = word
                 else:
-                    if len(out) >= max_lines - 1:
-                        break
-                    prefix = ""
-                    for j in range(1, len(word_str)):
-                        if self.font.getlength(word_str[:j] + "-") <= max_w:
-                            prefix = word_str[:j]
-                        else:
-                            break
-                    if not prefix:
-                        prefix = word_str[0]
-                    out.append(prefix + "-")
-                    words[word_idx] = word_str[len(prefix):]
-
-        if word_idx < len(words):
-            current_line_idx = len(out)
-            max_w = (W - 27) if current_line_idx < 4 else (W - 4)
-            remainder = f"{cur} {words[word_idx]}".strip() if cur else words[word_idx]
-            while remainder and self.font.getlength(remainder + "..") > max_w:
-                remainder = remainder[:-1]
-            out.append((remainder + "..").strip() if remainder else "..")
-        elif cur:
+                    # Single word is too wide, just add it and move on
+                    out.append(word)
+                    cur = ""
+        if cur:
             out.append(cur)
 
-        for line_idx, line_str in enumerate(out):
-            start_x = 27 if line_idx < 4 else 2
-            draw.text((start_x, line_idx * line_h + 18), line_str, fill=WHITE, font=self.font)
+        line_h = 6
+        for i, line_str in enumerate(out):
+            y = y_offset + (i * line_h)
+            if y + line_h > H:
+                break
+            draw.text((1, y), line_str, fill=WHITE, font=self.font)
