@@ -77,8 +77,8 @@ def main():
             else:
                 matrix.Clear()
             
-            # Modify the value below to adjust the refresh rate
-            time.sleep(0.06)
+            # Smooth 50 FPS refresh rate
+            time.sleep(0.02)
             
     except KeyboardInterrupt:
         print(' Interrupted with Ctrl-C')
