@@ -126,7 +126,13 @@ class SpotifyModule:
                         'startTimeMs': line.start_ms if line.start_ms is not None else 0,
                         'words': line.text
                     })
-                return {'lyrics': {'lines': lines}}
+                is_synced = any(line.start_ms is not None for line in res.lyrics)
+                return {
+                    'lyrics': {
+                        'lines': lines,
+                        'syncType': 'LINE_SYNCED' if is_synced else 'UNSYNCED'
+                    }
+                }
                 
             try:
                 self.last_lyrics = fetch_lyrics()

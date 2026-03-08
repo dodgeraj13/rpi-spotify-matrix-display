@@ -67,6 +67,7 @@ class SpotifyPlayer:
 
         self.last_is_playing_state = None
         self.play_show_time = 0.0
+        self.slide_finish_time = 0.0
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -181,6 +182,7 @@ class SpotifyPlayer:
         self.slide_frames += 1
         if self.slide_frames >= self.total_slide_frames:
             self.slide_active = False
+            self.slide_finish_time = time.time()
             
         return composite
 
@@ -201,7 +203,7 @@ class SpotifyPlayer:
 
         # 0. Check for active lyrics to drive transition
         has_lyrics_now = False
-        if response.lyrics and response.lyrics.get('lyrics', {}).get('lines'):
+        if response.lyrics and response.lyrics.get('lyrics', {}).get('syncType') == 'LINE_SYNCED':
             lines = response.lyrics['lyrics']['lines']
             current_line = None
             for line in lines:
@@ -213,7 +215,7 @@ class SpotifyPlayer:
             if current_line and current_line != "♪":
                 has_lyrics_now = True
 
-        if has_lyrics_now and response.is_playing:
+        if has_lyrics_now and response.is_playing and not self.slide_active and (time.time() - self.slide_finish_time > 1.0):
             if self.lyrics_transition_frames < self.max_lyrics_transition_frames:
                 self.lyrics_transition_frames += 1
         else:
