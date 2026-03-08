@@ -47,6 +47,7 @@ class SpotifyPlayer:
         self.is_playing = None
         self.playback_start_time = 0.0
         self.last_active_time = math.floor(time.time())
+        self.last_playing_time = time.time()  # Track when we were last playing
         self.response: Optional[PlaybackInfo] = None
         self.response_timestamp = 0.0
         self.response_progress_ms = 0
@@ -124,8 +125,14 @@ class SpotifyPlayer:
         self._update_track(response.artist, response.title)
         self._update_art(response.art_url)
 
+        # Check for 10-second pause to trigger fullscreen art
+        if response.is_playing:
+            self.last_playing_time = time.time()
+        
+        is_paused_long = not response.is_playing and (time.time() - self.last_playing_time > 10.0)
+
         target_frame = None
-        if self.always_fullscreen:
+        if self.always_fullscreen or is_paused_long:
             target_frame = self._generate_fullscreen_frame(progress_ms, duration_ms)
         else:
             target_frame = self._generate_normal_frame(response, progress_ms, duration_ms)
@@ -186,8 +193,6 @@ class SpotifyPlayer:
             else:
                 img.paste(self.current_art_img, (0, 0))
 
-        draw = ImageDraw.Draw(img)
-        self._draw_progress_bar(draw, progress_ms, duration_ms)
         return img
 
     def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int) -> Image.Image:
