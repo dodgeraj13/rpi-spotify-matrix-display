@@ -224,7 +224,21 @@ class SpotifyPlayer:
         # 1. Title & Artist (scrolling)
         # No lyrics: x=1, width=W-2. Lyrics: x=17, width=W-18
         text_x = int(1 + (16 * art_t))
-        text_width = W - text_x - 1 # 1px padding from right
+        
+        # Play indicator sliding logic - target position (55, 3)
+        btn_target_x = 55
+        btn_left_padding = 3
+        # A 13-pixel wide box unit
+        
+        # Start btn_x off-screen so the box's leading edge (box_left) starts at W
+        btn_start_x = W + btn_left_padding
+        btn_x = int(btn_target_x + (btn_start_x - btn_target_x) * art_t)
+        
+        box_left = btn_x - btn_left_padding
+        box_right = box_left + 12
+        
+        # Adjust text width to avoid overlap with the sliding box
+        text_width = box_left - text_x - 1
         
         # synchronized scroll update - now with displacement compensation and transition awareness
         self._update_scroll_animation(text_x, art_t)
@@ -265,7 +279,14 @@ class SpotifyPlayer:
         elif t_total == 1.0:
             self._draw_progress_bar(draw, progress_ms, duration_ms, x=text_x, y=14, width=text_width)
 
-        # 3. CLIP and Art
+        # 3. Play Indicator Background (behind Art)
+        if box_left < W:
+            # Fixed box (Y coordinates 0 to 12)
+            # Sitting flush with the 48x48 art which starts at Y=14 (leaving 1px gap at Y=13)
+            # Drawn before Art so Art can overlay it if they transition/overlap
+            draw.rectangle((box_left, 0, box_right, 12), fill=(0, 0, 0))
+
+        # 4. CLIP and Art
         # CLIP LEFT: Prevent scrolling behind art
         if art_t > 0.5:
              draw.rectangle((0, 0, text_x - 1, 16), fill=(0, 0, 0))
@@ -282,15 +303,12 @@ class SpotifyPlayer:
             art = self.current_art_img.resize((art_size, art_size), Image.LANCZOS)
             img.paste(art, (art_x, art_y))
 
-        # 4. Play indicator - centered on artwork
-        show_play = (time.time() - self.play_show_time) < 3.0
-        if show_play:
-            # Full 48x48 center: (30, 35). Thumbnail 16x16 center: (6, 5).
-            play_x = int(30 - (24 * art_t))
-            play_y = int(35 - (30 * art_t))
-            self._draw_play_pause(draw, play_x, play_y, is_playing=response.is_playing)
+        # 5. Play indicator Icon - slides into top right corner in normal mode
+        if box_left < W and btn_x < W:
+            # Icon at Y=3
+            self._draw_play_pause(draw, btn_x, 3, is_playing=response.is_playing)
 
-        # 5. Lyrics
+        # 6. Lyrics
         # Appear and fade in during the final phase (Starting at frame 23)
         if self.lyrics_transition_frames >= 23 and has_lyrics_now:
             p_lyrics = min(1.0, (self.lyrics_transition_frames - 22) / 6.0)
