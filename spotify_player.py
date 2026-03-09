@@ -44,6 +44,10 @@ class SpotifyPlayer:
         self.artist_animation_pos = 0.0
         self.last_scroll_time = time.time()
         self.last_text_x = 1
+        self.title_limit = 0
+        self.artist_limit = 0
+        self.is_scrolling = False
+        self.last_scroll_end_time = 0.0
         self.is_playing = None
         self.playback_start_time = 0.0
         self.last_active_time = math.floor(time.time())
@@ -333,6 +337,26 @@ class SpotifyPlayer:
             self.title_animation_pos = 0.0
             self.artist_animation_pos = 0.0
             self.last_title_reset = self.last_artist_reset = time.time()
+            self._calculate_text_limits()
+
+    def _calculate_text_limits(self):
+        spacer = "     "
+        stable_width = W - 18
+        
+        title_text = self.current_title or "Unknown Title"
+        artist_text = self.current_artist or "Unknown Artist"
+        
+        title_p_width = self.font.getlength(title_text)
+        artist_p_width = self.font.getlength(artist_text)
+        
+        self.title_limit = self.font.getlength(title_text + spacer) if title_p_width > stable_width else 0
+        self.artist_limit = self.font.getlength(artist_text + spacer) if artist_p_width > stable_width else 0
+        
+        # Reset scrolling state for new track
+        self.is_scrolling = False
+        self.title_animation_pos = 0.0
+        self.artist_animation_pos = 0.0
+        self.last_scroll_end_time = time.time()
 
     def _update_art(self, art_url: str):
         if self.current_art_url != art_url:
@@ -351,66 +375,53 @@ class SpotifyPlayer:
 
     def _update_scroll_animation(self, text_x: int, t_progress: float):
         now = time.time()
-        dt = now - self.last_scroll_time
-        self.last_scroll_time = now
-
-        dx = text_x - self.last_text_x
-        self.last_text_x = text_x
-        
-        spacer = "     "
         speed = 15.0 # pixels per second
         
-        title_text = self.current_title or "Unknown Title"
-        artist_text = self.current_artist or "Unknown Artist"
-        
-        # Stability: calculate limits based on potential constrained width
-        stable_width = W - 18
-        title_p_width = self.font.getlength(title_text)
-        artist_p_width = self.font.getlength(artist_text)
-        
-        title_limit = self.font.getlength(title_text + spacer) if title_p_width > stable_width else 0
-        artist_limit = self.font.getlength(artist_text + spacer) if artist_p_width > stable_width else 0
-        
-        # Are we currently in the "active scrolling" phase?
-        is_active = (self.title_animation_pos > 0.01 or self.artist_animation_pos > 0.01)
-        
-        if not is_active:
-            # Check if we should start the cycle
-            if (title_limit > 0 or artist_limit > 0) and (now - self.last_title_reset >= self.scroll_delay):
+        # 1. State management for scrolling cycle
+        if not self.is_scrolling:
+            # Check if we should start the cycle (delay has passed)
+            if (self.title_limit > 0 or self.artist_limit > 0) and (now - self.last_scroll_end_time >= self.scroll_delay):
                 if 0.0 < t_progress < 1.0:
-                    # Hold in place during transition
-                    self.last_title_reset = now
+                    # Keep waiting until layout transition is finished
+                    pass
                 else:
-                    is_active = True
+                    self.is_scrolling = True
+                    self.last_title_reset = now # Re-use as start of active scroll
         
-        if is_active:
-            # Restore matrix stability: add text_x displacement to current pos
-            self.title_animation_pos += dx
-            self.artist_animation_pos += dx
+        # 2. Calculate animation positions
+        if self.is_scrolling:
+            # Calculate positions based on absolute time since cycle started for maximum stability
+            elapsed = now - self.last_title_reset
             
-            # Increment title
-            if title_limit > 0 and self.title_animation_pos < title_limit:
-                self.title_animation_pos += dt * speed
-            
-            # Increment artist
-            if artist_limit > 0 and self.artist_animation_pos < artist_limit:
-                self.artist_animation_pos += dt * speed
+            # Update title pos
+            if self.title_limit > 0:
+                self.title_animation_pos = elapsed * speed
+            else:
+                self.title_animation_pos = 0.0
+                
+            # Update artist pos
+            if self.artist_limit > 0:
+                self.artist_animation_pos = elapsed * speed
+            else:
+                self.artist_animation_pos = 0.0
 
-            # Finish criteria: both reached their limits (or are zero)
-            title_done = (title_limit == 0 or self.title_animation_pos >= title_limit)
-            artist_done = (artist_limit == 0 or self.artist_animation_pos >= artist_limit)
+            # Check if both have finished their content
+            title_done = (self.title_limit == 0 or self.title_animation_pos >= self.title_limit)
+            artist_done = (self.artist_limit == 0 or self.artist_animation_pos >= self.artist_limit)
             
             if title_done and artist_done:
+                self.is_scrolling = False
                 self.title_animation_pos = 0.0
                 self.artist_animation_pos = 0.0
-                self.last_title_reset = now
+                self.last_scroll_end_time = now
         else:
-            # Sync: if not scrolling, both stay at start
+            # Not scrolling: Reset and hold at start
             self.title_animation_pos = 0.0
             self.artist_animation_pos = 0.0
 
-        self.title_animation_cnt = int(max(0.0, self.title_animation_pos))
-        self.artist_animation_cnt = int(max(0.0, self.artist_animation_pos))
+        # Snapshot integer counts for rendering (using round for smoother transition)
+        self.title_animation_cnt = int(round(self.title_animation_pos))
+        self.artist_animation_cnt = int(round(self.artist_animation_pos))
 
     def _draw_text(self, draw: ImageDraw.Draw, text: str, x: int, y: int, width: int, is_title: bool):
         text = text or ("Unknown Title" if is_title else "Unknown Artist")
