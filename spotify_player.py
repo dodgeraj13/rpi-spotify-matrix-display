@@ -79,6 +79,7 @@ class SpotifyPlayer:
         
         self._art_cache = {} # url -> resized_map (size -> Image)
         self._fetching_art_url: Optional[str] = None
+        self.pending_response: Optional[PlaybackInfo] = None
         
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -100,12 +101,35 @@ class SpotifyPlayer:
         now = time.time()
         
         if not self.spotify_module.queue.empty():
-            self.response = self.spotify_module.queue.get()
+            new_data = self.spotify_module.queue.get()
             with self.spotify_module.queue.mutex:
                 self.spotify_module.queue.queue.clear()
-            if self.response:
+            
+            if new_data:
+                # If it's a new track, don't swap 'self.response' yet.
+                # Put it in pending and wait for art fetch.
+                if self.response and self.response.track_id and new_data.track_id != self.response.track_id:
+                    self.pending_response = new_data
+                    self._update_art(new_data.art_url)
+                else:
+                    self.response = new_data
+                    self.response_timestamp = now
+                    self.response_progress_ms = self.response.progress_ms if self.response else 0
+                    self.pending_response = None
+
+        # Check if pending response is now ready (art fetch finished)
+        if self.pending_response:
+            # Art is ready if the URL matches what we fetched OR if fetcher failed/finished
+            # We track progress by checking if _fetching_art_url has cleared back to None
+            if self._fetching_art_url is None:
+                # Art is ready or failed. Trigger transition.
+                self.response = self.pending_response
                 self.response_timestamp = now
                 self.response_progress_ms = self.response.progress_ms
+                self.pending_response = None
+                
+                # Note: self._handle_track_change will be called inside _generate_frame
+                # when it sees the updated self.response.track_id
 
         frame = self._generate_frame(self.response, now)
         self.last_generated_frame = frame
@@ -129,6 +153,8 @@ class SpotifyPlayer:
                 return self.black_screen
 
         if response.track_id and response.track_id != self.current_track_id:
+            # This triggers the snapshot of the OLD frame (last_generated_frame)
+            # and starts the slide_active flag.
             self._handle_track_change(response.track_id)
 
         progress_ms = response.progress_ms
@@ -141,7 +167,12 @@ class SpotifyPlayer:
             progress_ms = min(progress_ms, duration_ms)
 
         self._update_track(response.artist, response.title, now)
-        self._update_art(response.art_url)
+        
+        # We don't call _update_art here anymore because it's managed 
+        # in generate() to synchronize with the transition.
+        # But for non-track-changing updates (same song), we should ensure art is set.
+        if self.current_art_url != response.art_url and self._fetching_art_url is None:
+             self._update_art(response.art_url)
 
         # Check for 10-second pause to trigger fullscreen art
         if response.is_playing:
@@ -317,7 +348,9 @@ class SpotifyPlayer:
         # CLIP RIGHT: 1px padding
         draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
 
-        if self.current_art_img and self.current_art_url == response.art_url:
+        if self.current_art_img:
+            # We no longer need the 'current_art_url == response.art_url' check here
+            # because the slide only starts after they match.
             # No lyrics: 48x48 at (8, 14) [ends at 62]. Lyrics: 15x15 at (1, 1) [ends at 16].
             art_size = int(48 - (33 * art_t))
             art_x = int(8 - (7 * art_t))
@@ -376,18 +409,29 @@ class SpotifyPlayer:
         self.last_scroll_end_time = now
 
     def _update_art(self, art_url: str):
-        if not art_url: return
+        if not art_url:
+            self.current_art_url = ""
+            self.current_art_img = None
+            return
+
         if self.current_art_url != art_url and self._fetching_art_url != art_url:
             self._fetching_art_url = art_url
             def fetcher():
-                img = self._fetch_image(art_url)
-                if img:
-                    self.current_art_img = img
+                try:
+                    img = self._fetch_image(art_url)
+                    if img:
+                        self.current_art_img = img
+                        self.current_art_url = art_url
+                        # Clear old art from cache (keep it lean)
+                        if len(self._art_cache) > 2:
+                             self._art_cache.clear()
+                    else:
+                        # Fetch failed, allow transition anyway
+                        self.current_art_url = art_url
+                except Exception:
                     self.current_art_url = art_url
-                    # Clear old art from cache (keep it lean)
-                    if len(self._art_cache) > 2:
-                         self._art_cache.clear()
-                self._fetching_art_url = None
+                finally:
+                    self._fetching_art_url = None
                 
             threading.Thread(target=fetcher, daemon=True).start()
 
