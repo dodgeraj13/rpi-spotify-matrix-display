@@ -32,9 +32,12 @@ class SpotifyModule:
         self.spotify: Optional[spotipy.Spotify] = None
         self.ll: Optional[LibreLyrics] = None
         self.last_track_id = None
-        self.last_lyrics = None
+        self.last_lyrics: Optional[dict] = None
         self.device_whitelist = self._parse_whitelist(config)
         self.rate_limit_until = 0.0
+        self._device_cache = True
+        self._last_device_check = 0.0
+        self._fetching_lyrics_id: Optional[str] = None
         
         self._setup_spotify()
         self._setup_librelyrics()
@@ -118,49 +121,59 @@ class SpotifyModule:
             return None
             
         if track_id != self.last_track_id:
-            def fetch_lyrics() -> Optional[dict]:
-                res = self.ll.fetch(f"https://open.spotify.com/track/{track_id}")
-                lines = []
-                for line in res.lyrics:
-                    lines.append({
-                        'startTimeMs': line.start_ms if line.start_ms is not None else 0,
-                        'words': line.text
-                    })
-                is_synced = any(line.start_ms is not None for line in res.lyrics)
-                return {
-                    'lyrics': {
-                        'lines': lines,
-                        'syncType': 'LINE_SYNCED' if is_synced else 'UNSYNCED'
-                    }
-                }
-                
-            try:
-                self.last_lyrics = fetch_lyrics()
-            except Exception as e:
-                print(f"fetch_lyrics failed for {track_id}: {e}")
-                import traceback
-                traceback.print_exc()
-                self._setup_librelyrics()
+            if self._fetching_lyrics_id == track_id:
+                return None # Still fetching
+            
+            self._fetching_lyrics_id = track_id
+            
+            def fetch_thread():
                 try:
-                    self.last_lyrics = fetch_lyrics()
-                except Exception as e2:
-                    print(f"fetch_lyrics retry failed: {e2}")
+                    res = self.ll.fetch(f"https://open.spotify.com/track/{track_id}")
+                    lines = []
+                    for line in res.lyrics:
+                        lines.append({
+                            'startTimeMs': line.start_ms if line.start_ms is not None else 0,
+                            'words': line.text
+                        })
+                    is_synced = any(line.start_ms is not None for line in res.lyrics)
+                    self.last_lyrics = {
+                        'lyrics': {
+                            'lines': lines,
+                            'syncType': 'LINE_SYNCED' if is_synced else 'UNSYNCED'
+                        }
+                    }
+                    self.last_track_id = track_id
+                except Exception as e:
+                    print(f"fetch_lyrics failed for {track_id}: {e}")
                     self.last_lyrics = None
-            self.last_track_id = track_id
+                finally:
+                    self._fetching_lyrics_id = None
+            
+            import threading
+            threading.Thread(target=fetch_thread, daemon=True).start()
+            return None
             
         return self.last_lyrics
 
     def _is_whitelisted_device(self) -> bool:
         if not self.device_whitelist:
             return True
+        
+        now = time.time()
+        if now - self._last_device_check < 30.0:
+            return self._device_cache
+
         try:
              devices = self.spotify.devices()
+             self._last_device_check = now
              for d in devices.get('devices', []):
                  if d.get('is_active') and d.get('name') in self.device_whitelist:
+                     self._device_cache = True
                      return True
+             self._device_cache = False
              return False
         except Exception:
-            return False
+            return self._device_cache
 
     def _parse_whitelist(self, config):
         if 'Spotify' not in config: return []

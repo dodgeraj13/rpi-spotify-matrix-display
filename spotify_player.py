@@ -232,7 +232,7 @@ class SpotifyPlayer:
             if current_line and current_line != "♪":
                 has_lyrics_now = True
 
-        if has_lyrics_now and response.is_playing and not self.slide_active and (now - self.slide_finish_time > 1.0):
+        if has_lyrics_now and response.is_playing and not self.slide_active and (now - self.slide_finish_time > 0.4):
             if self.lyrics_transition_frames < self.max_lyrics_transition_frames:
                 self.lyrics_transition_frames += 1
         else:
