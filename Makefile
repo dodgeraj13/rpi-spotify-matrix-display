@@ -30,10 +30,10 @@ clean: ## Reset repo to a clean state
 	rm -f .cache
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || sudo rm -rf {} +
 	find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || sudo rm -f {} +
-	@if [ -d deps/rpi-rgb-led-matrix ]; then \
+	@if [ -d rpi-rgb-led-matrix ]; then \
 		echo "🧹 Cleaning rpi-rgb-led-matrix submodule..."; \
-		rm -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp; \
-		rm -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp; \
+		rm -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp; \
+		rm -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp; \
 	fi
 	@if [ -f /etc/systemd/system/matrix.service ]; then \
 		echo "🗑 Removing matrix systemd service..."; \
@@ -66,16 +66,16 @@ rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
 		echo "📦 Installing cython3..."; \
 		sudo apt-get update && sudo apt-get install -y cython3; \
 	fi
-	@if [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
-	      [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
+	@if [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
+	      [ ! -f rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
 	    echo "🔨 Building rpi-rgb-led-matrix..."; \
-		cd deps/rpi-rgb-led-matrix && \
+		cd rpi-rgb-led-matrix && \
 			make -C bindings/python/rgbmatrix -B CYTHON=cython3 && \
 			make; \
 	fi
 	@if ! .venv/bin/python -c "import rgbmatrix" >/dev/null 2>&1; then \
 		echo "📦 Installing Python bindings..."; \
-		.venv/bin/pip install deps/rpi-rgb-led-matrix/bindings/python --use-pep517; \
+		.venv/bin/pip install rpi-rgb-led-matrix/bindings/python --use-pep517; \
 	fi
 
 rpi-service: ## Raspberry Pi ONLY - Set up systemd service and alias
