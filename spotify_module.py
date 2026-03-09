@@ -35,6 +35,8 @@ class SpotifyModule:
         self.last_lyrics: Optional[dict] = None
         self.device_whitelist = self._parse_whitelist(config)
         self.rate_limit_until = 0.0
+        self._device_cache: bool = True
+        self._last_device_check: float = 0.0
         self._fetching_lyrics_id: Optional[str] = None
         
         self._setup_spotify()
@@ -157,14 +159,21 @@ class SpotifyModule:
         if not self.device_whitelist:
             return True
 
+        now = time.time()
+        if now - self._last_device_check < 5.0:
+            return self._device_cache
+
         try:
              devices = self.spotify.devices()
+             self._last_device_check = now
              for d in devices.get('devices', []):
                  if d.get('is_active') and d.get('name') in self.device_whitelist:
+                     self._device_cache = True
                      return True
+             self._device_cache = False
              return False
         except Exception:
-            return False
+            return self._device_cache
 
     def _parse_whitelist(self, config):
         if 'Spotify' not in config: return []
