@@ -151,7 +151,7 @@ class SpotifyPlayer:
 
         target_frame = None
         if self.always_fullscreen or is_paused_long:
-            target_frame = self._generate_fullscreen_frame(progress_ms, duration_ms)
+            target_frame = self._generate_fullscreen_frame(progress_ms, duration_ms, response.art_url)
         else:
             target_frame = self._generate_normal_frame(response, progress_ms, duration_ms, now)
 
@@ -203,10 +203,10 @@ class SpotifyPlayer:
             
         return composite
 
-    def _generate_fullscreen_frame(self, progress_ms: int, duration_ms: int) -> Image.Image:
+    def _generate_fullscreen_frame(self, progress_ms: int, duration_ms: int, target_url: str) -> Image.Image:
         img = Image.new("RGB", (W, H), (0, 0, 0))
 
-        if self.current_art_img:
+        if self.current_art_img and self.current_art_url == target_url:
             if self.current_art_img.size != (64, 64):
                 img.paste(self.current_art_img.resize((64, 64), Image.LANCZOS), (0, 0))
             else:
@@ -317,7 +317,7 @@ class SpotifyPlayer:
         # CLIP RIGHT: 1px padding
         draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
 
-        if self.current_art_img:
+        if self.current_art_img and self.current_art_url == response.art_url:
             # No lyrics: 48x48 at (8, 14) [ends at 62]. Lyrics: 15x15 at (1, 1) [ends at 16].
             art_size = int(48 - (33 * art_t))
             art_x = int(8 - (7 * art_t))
