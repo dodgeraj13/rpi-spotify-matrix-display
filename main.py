@@ -69,7 +69,11 @@ def main():
         spotify_module = SpotifyModule(config)
         spotify_player = SpotifyPlayer(config, spotify_module)
         
+        target_fps = 50
+        target_frame_time = 1.0 / target_fps
+        
         while True:
+            start_time = time.time()
             frame = spotify_player.generate()
             
             if frame:
@@ -77,8 +81,10 @@ def main():
             else:
                 matrix.Clear()
             
-            # Smooth 50 FPS refresh rate
-            time.sleep(0.02)
+            # Precise timing: sleep for the remainder of the interval
+            elapsed = time.time() - start_time
+            sleep_time = max(0.0, float(target_frame_time - elapsed))
+            time.sleep(sleep_time)
             
     except KeyboardInterrupt:
         print(' Interrupted with Ctrl-C')

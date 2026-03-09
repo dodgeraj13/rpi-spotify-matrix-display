@@ -72,47 +72,60 @@ class SpotifyPlayer:
         self.last_is_playing_state = None
         self.play_show_time = 0.0
         self.slide_finish_time = 0.0
-
+        self.is_scrolling = False
+        self.title_limit = 0
+        self.artist_limit = 0
+        self.last_scroll_end_time = 0.0
+        
+        self._art_cache = {} # url -> resized_map (size -> Image)
+        self._fetching_art_url: Optional[str] = None
+        
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
     def _fetch_loop(self):
         time.sleep(3)
         while True:
+            start_time = time.time()
             try:
                 self.spotify_module.get_current_playback()
-                time.sleep(self.fetch_interval)
             except Exception as e:
                 print(f"Error fetching Spotify data: {e}")
-                time.sleep(self.fetch_interval)
+            finally:
+                # Precise timing: sleep for the remainder of the interval
+                elapsed = time.time() - start_time
+                sleep_time = max(0.0, self.fetch_interval - elapsed)
+                time.sleep(sleep_time)
 
     def generate(self) -> Optional[Image.Image]:
+        now = time.time()
+        
         if not self.spotify_module.queue.empty():
             self.response = self.spotify_module.queue.get()
             with self.spotify_module.queue.mutex:
                 self.spotify_module.queue.queue.clear()
             if self.response:
-                self.response_timestamp = time.time()
+                self.response_timestamp = now
                 self.response_progress_ms = self.response.progress_ms
 
-        frame = self._generate_frame(self.response)
+        frame = self._generate_frame(self.response, now)
         self.last_generated_frame = frame
         return frame
 
-    def _generate_frame(self, response: Optional[PlaybackInfo]) -> Optional[Image.Image]:
+    def _generate_frame(self, response: Optional[PlaybackInfo], now: float) -> Optional[Image.Image]:
         if not response:
             return self.black_screen
 
         if response.is_playing != self.last_is_playing_state:
-            self.play_show_time = time.time()
+            self.play_show_time = now
         
         if response.is_playing:
-            self.last_active_time = math.floor(time.time())
+            self.last_active_time = math.floor(now)
         
         self.last_is_playing_state = response.is_playing
         self.is_playing = response.is_playing
         
         if not response.is_playing:
-            if math.floor(time.time()) - self.last_active_time > self.shutdown_delay:
+            if math.floor(now) - self.last_active_time > self.shutdown_delay:
                 return self.black_screen
 
         if response.track_id and response.track_id != self.current_track_id:
@@ -120,27 +133,27 @@ class SpotifyPlayer:
 
         progress_ms = response.progress_ms
         if self.response_timestamp > 0 and response.is_playing:
-            elapsed = int((time.time() - self.response_timestamp) * 1000)
+            elapsed = int((now - self.response_timestamp) * 1000)
             progress_ms += elapsed
 
         duration_ms = response.duration_ms
         if duration_ms > 0:
             progress_ms = min(progress_ms, duration_ms)
 
-        self._update_track(response.artist, response.title)
+        self._update_track(response.artist, response.title, now)
         self._update_art(response.art_url)
 
         # Check for 10-second pause to trigger fullscreen art
         if response.is_playing:
-            self.last_playing_time = time.time()
+            self.last_playing_time = now
         
-        is_paused_long = not response.is_playing and (time.time() - self.last_playing_time > 10.0)
+        is_paused_long = not response.is_playing and (now - self.last_playing_time > 10.0)
 
         target_frame = None
         if self.always_fullscreen or is_paused_long:
             target_frame = self._generate_fullscreen_frame(progress_ms, duration_ms)
         else:
-            target_frame = self._generate_normal_frame(response, progress_ms, duration_ms)
+            target_frame = self._generate_normal_frame(response, progress_ms, duration_ms, now)
 
         if self.slide_active:
             return self._generate_slide_transition(target_frame)
@@ -201,7 +214,7 @@ class SpotifyPlayer:
 
         return img
 
-    def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int) -> Image.Image:
+    def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int, now: float) -> Image.Image:
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
@@ -219,7 +232,7 @@ class SpotifyPlayer:
             if current_line and current_line != "♪":
                 has_lyrics_now = True
 
-        if has_lyrics_now and response.is_playing and not self.slide_active and (time.time() - self.slide_finish_time > 1.0):
+        if has_lyrics_now and response.is_playing and not self.slide_active and (now - self.slide_finish_time > 1.0):
             if self.lyrics_transition_frames < self.max_lyrics_transition_frames:
                 self.lyrics_transition_frames += 1
         else:
@@ -239,7 +252,6 @@ class SpotifyPlayer:
         # Play indicator sliding logic - target position (55, 3)
         btn_target_x = 55
         btn_left_padding = 3
-        # A 13-pixel wide box unit
         
         # Start btn_x off-screen so the box's leading edge (box_left) starts at W
         btn_start_x = W + btn_left_padding
@@ -252,7 +264,7 @@ class SpotifyPlayer:
         text_width = box_left - text_x - 1
         
         # synchronized scroll update - now with displacement compensation and transition awareness
-        self._update_scroll_animation(text_x, art_t)
+        self._update_scroll_animation(text_x, art_t, now)
         
         # y positions: 1px from top, 1px gap
         self._draw_text(draw, self.current_title, text_x, 1, text_width, is_title=True)
@@ -311,8 +323,13 @@ class SpotifyPlayer:
             art_x = int(8 - (7 * art_t))
             art_y = int(14 - (13 * art_t))
             
-            art = self.current_art_img.resize((art_size, art_size), Image.LANCZOS)
-            img.paste(art, (art_x, art_y))
+            # Use cached resized versions
+            cached_map = self._art_cache.get(self.current_art_url, {})
+            if art_size not in cached_map:
+                cached_map[art_size] = self.current_art_img.resize((art_size, art_size), Image.LANCZOS)
+                self._art_cache[self.current_art_url] = cached_map
+            
+            img.paste(cached_map[art_size], (art_x, art_y))
 
         # 5. Play indicator Icon - slides into top right corner in normal mode
         if box_left < W and btn_x < W:
@@ -328,7 +345,7 @@ class SpotifyPlayer:
 
         return img
 
-    def _update_track(self, artist: str, title: str):
+    def _update_track(self, artist: str, title: str, now: float):
         if self.current_title != title or self.current_artist != artist:
             self.current_artist = artist
             self.current_title = title
@@ -336,10 +353,10 @@ class SpotifyPlayer:
             self.artist_animation_cnt = 0
             self.title_animation_pos = 0.0
             self.artist_animation_pos = 0.0
-            self.last_title_reset = self.last_artist_reset = time.time()
-            self._calculate_text_limits()
+            self.last_title_reset = self.last_artist_reset = now
+            self._calculate_text_limits(now)
 
-    def _calculate_text_limits(self):
+    def _calculate_text_limits(self, now: float):
         spacer = "     "
         stable_width = W - 18
         
@@ -356,12 +373,23 @@ class SpotifyPlayer:
         self.is_scrolling = False
         self.title_animation_pos = 0.0
         self.artist_animation_pos = 0.0
-        self.last_scroll_end_time = time.time()
+        self.last_scroll_end_time = now
 
     def _update_art(self, art_url: str):
-        if self.current_art_url != art_url:
-            self.current_art_url = art_url
-            self.current_art_img = self._fetch_image(art_url)
+        if not art_url: return
+        if self.current_art_url != art_url and self._fetching_art_url != art_url:
+            self._fetching_art_url = art_url
+            def fetcher():
+                img = self._fetch_image(art_url)
+                if img:
+                    self.current_art_img = img
+                    self.current_art_url = art_url
+                    # Clear old art from cache (keep it lean)
+                    if len(self._art_cache) > 2:
+                         self._art_cache.clear()
+                self._fetching_art_url = None
+                
+            threading.Thread(target=fetcher, daemon=True).start()
 
     def _fetch_image(self, url: str) -> Optional[Image.Image]:
         try:
@@ -373,8 +401,7 @@ class SpotifyPlayer:
             print(f"Error fetching image {url}: {e}")
             return None
 
-    def _update_scroll_animation(self, text_x: int, t_progress: float):
-        now = time.time()
+    def _update_scroll_animation(self, text_x: int, t_progress: float, now: float):
         speed = 15.0 # pixels per second
         
         # 1. State management for scrolling cycle
