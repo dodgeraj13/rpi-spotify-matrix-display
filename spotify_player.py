@@ -76,6 +76,7 @@ class SpotifyPlayer:
         self.title_limit = 0
         self.artist_limit = 0
         self.last_scroll_end_time = 0.0
+        self.lyrics_mode_active = False  # True while button should be in lyrics position
         
         self._art_cache = {} # url -> resized_map (size -> Image)
         self._fetching_art_url: Optional[str] = None
@@ -263,6 +264,7 @@ class SpotifyPlayer:
             if current_line and current_line != "♪":
                 has_lyrics_now = True
 
+        prev_lyrics_frames = self.lyrics_transition_frames
         if has_lyrics_now and response.is_playing and not self.slide_active and (now - self.slide_finish_time > 0.4):
             if self.lyrics_transition_frames < self.max_lyrics_transition_frames:
                 self.lyrics_transition_frames += 1
@@ -270,8 +272,18 @@ class SpotifyPlayer:
             if self.lyrics_transition_frames > 0:
                 self.lyrics_transition_frames -= 1
 
+        # Track direction to decide which button position to show.
+        # Switch to lyrics position the moment frames increase; revert the moment they decrease.
+        if self.lyrics_transition_frames > prev_lyrics_frames:
+            self.lyrics_mode_active = True
+        elif self.lyrics_transition_frames < prev_lyrics_frames:
+            self.lyrics_mode_active = False
+
         # Total normalized progress (0.0 to 1.0 over 28 frames)
         t_total = self.lyrics_transition_frames / self.max_lyrics_transition_frames
+        # Ensure we exit lyrics mode definitively when the transition is complete
+        if t_total == 0:
+            self.lyrics_mode_active = False
         
         # Art & Header transition (Locked to first 16 frames)
         art_t = min(1.0, self.lyrics_transition_frames / 16.0)
@@ -280,19 +292,37 @@ class SpotifyPlayer:
         # No lyrics: x=1, width=W-2. Lyrics: x=17, width=W-18
         text_x = int(1 + (16 * art_t))
         
-        # Play indicator sliding logic - target position (55, 3)
+        # Play indicator sliding logic
+        # Normal mode: top-right (y=3), slides in via art_t
+        # Lyrics mode: bottom-right (y=55), slides in fresh from right via t_total
         btn_target_x = 55
         btn_left_padding = 3
-        
-        # Start btn_x off-screen so the box's leading edge (box_left) starts at W
         btn_start_x = W + btn_left_padding
-        btn_x = int(btn_target_x + (btn_start_x - btn_target_x) * art_t)
-        
+
+        if self.lyrics_mode_active:
+            # Entering lyrics: button at bottom-right, slides in from right as t_total 0→1
+            btn_target_x_lyrics = 56
+            btn_y = 54
+            btn_x = int(btn_target_x_lyrics + (btn_start_x - btn_target_x_lyrics) * (1.0 - t_total))
+        else:
+            # Normal mode: button always present at top-right.
+            btn_y = 3
+            btn_x = btn_target_x
+
+
         box_left = btn_x - btn_left_padding
         box_right = box_left + 12
+        box_top = btn_y - 3
+        box_bottom = btn_y + 9
         
-        # Adjust text width to avoid overlap with the sliding box
-        text_width = box_left - text_x - 1
+        # Adjust text width to avoid overlap with the sliding box.
+        # In normal mode use the TARGET box_left (btn_target_x - padding = 52) so the
+        # title/artist never expands when the button is animating in from off-screen.
+        if self.lyrics_mode_active:
+            text_width = box_left - text_x - 1
+        else:
+            target_box_left = btn_target_x - btn_left_padding  # always 52
+            text_width = target_box_left - text_x - 1
         
         # synchronized scroll update - now with displacement compensation and transition awareness
         self._update_scroll_animation(text_x, art_t, now)
@@ -311,10 +341,11 @@ class SpotifyPlayer:
                 self._draw_progress_bar(draw, progress_ms, duration_ms, x=0, y=bar_y)
         
         # Header progress bar animation (starts AFTER art_t reaches 1.0)
+        # In lyrics mode the button is at y=55 (below the header), so the bar
+        # can extend to the full available width rather than stopping at box_left.
+        bar_width = W - text_x - 1 if t_total > 0 else text_width
         if self.lyrics_transition_frames > 16:
-            bar_width = text_width
             target_green_w = round(bar_width * progress_ms / duration_ms) if duration_ms > 0 else 0
-            
             if self.lyrics_transition_frames <= 22:
                 # Phase 1: Green part "grows" in one frame at a time (Frames 17-22)
                 p_green = (self.lyrics_transition_frames - 16) / 6.0
@@ -331,14 +362,13 @@ class SpotifyPlayer:
                 if target_green_w > 0:
                     draw.rectangle((text_x, 14, text_x + target_green_w - 1, 15), fill=GREEN)
         elif t_total == 1.0:
-            self._draw_progress_bar(draw, progress_ms, duration_ms, x=text_x, y=14, width=text_width)
+            self._draw_progress_bar(draw, progress_ms, duration_ms, x=text_x, y=14, width=bar_width)
 
-        # 3. Play Indicator Background (behind Art)
-        if box_left < W:
-            # Fixed box (Y coordinates 0 to 12)
-            # Sitting flush with the 48x48 art which starts at Y=14 (leaving 1px gap at Y=13)
-            # Drawn before Art so Art can overlay it if they transition/overlap
-            draw.rectangle((box_left, 0, box_right, 12), fill=(0, 0, 0))
+        # 3. Play Indicator Background (behind Art, normal mode only)
+        # Only pre-draw in normal mode so art can cleanly overlap it.
+        # In lyrics mode the icon is at bottom-right (below art) and drawn last.
+        if box_left < W and t_total == 0:
+            draw.rectangle((box_left, box_top, box_right, box_bottom), fill=(0, 0, 0))
 
         # 4. CLIP and Art
         # CLIP LEFT: Prevent scrolling behind art
@@ -364,17 +394,23 @@ class SpotifyPlayer:
             
             img.paste(cached_map[art_size], (art_x, art_y))
 
-        # 5. Play indicator Icon - slides into top right corner in normal mode
-        if box_left < W and btn_x < W:
-            # Icon at Y=3
-            self._draw_play_pause(draw, btn_x, 3, is_playing=response.is_playing)
-
-        # 6. Lyrics
+        # 5. Lyrics
         # Appear and fade in during the final phase (Starting at frame 23)
         if self.lyrics_transition_frames >= 23 and has_lyrics_now:
             p_lyrics = min(1.0, (self.lyrics_transition_frames - 22) / 6.0)
             c = int(255 * p_lyrics)
             self._draw_lyrics(img, draw, response.lyrics, progress_ms, y_offset=18, fill=(c, c, c))
+
+        # 6. Play indicator Icon (drawn last - always on top of lyrics)
+        if box_left < W and btn_x < W:
+            # Show static play triangle for 2s after resume or track change, then animate
+            PLAY_SHOW_DURATION = 2.0
+            recently_resumed = response.is_playing and (now - self.play_show_time < PLAY_SHOW_DURATION)
+            recently_changed = not self.slide_active and (now - self.slide_finish_time < PLAY_SHOW_DURATION)
+            freeze_play = recently_resumed or recently_changed
+            lyr_pad = 1 if t_total > 0 else 0
+            draw.rectangle((box_left - lyr_pad, box_top - lyr_pad, box_right + lyr_pad, box_bottom + lyr_pad), fill=(0, 0, 0))
+            self._draw_play_pause(draw, btn_x, btn_y, is_playing=response.is_playing, freeze=freeze_play)
 
         return img
 
@@ -513,12 +549,26 @@ class SpotifyPlayer:
             if w > 0:
                 draw.rectangle((x, y, x + min(w, bar_width) - 1, y + 1), fill=GREEN)
 
-    def _draw_play_pause(self, draw: ImageDraw.Draw, x: int, y: int, is_playing: bool):
+    def _draw_play_pause(self, draw: ImageDraw.Draw, x: int, y: int, is_playing: bool, freeze: bool = False):
         if not is_playing:
-            draw.line([(x, y), (x, y + 6)], fill=GREEN, width=2)
-            draw.line([(x + 3, y), (x + 3, y + 6)], fill=GREEN, width=2)
-        else:
+            # Two solid vertical bars (pause icon)
+            draw.rectangle((x, y, x + 1, y + 6), fill=GREEN)
+            draw.rectangle((x + 3, y, x + 4, y + 6), fill=GREEN)
+        elif freeze:
+            # Static play triangle (shown briefly after resume / track change)
             draw.polygon([(x, y), (x, y + 6), (x + 4, y + 3)], fill=GREEN)
+        else:
+            # 3 animated bars extending from center in both directions
+            # Clamped to y..y+6 to match the pause icon footprint
+            t = time.time()
+            center_y = y + 3
+            for i in range(3):
+                freq = 12 + (i * 3)
+                phase = i * 2
+                half_h = 1.0 + 2.5 * (0.5 + 0.5 * math.sin(t * freq + phase))
+                bar_top = max(y, int(center_y - half_h))
+                bar_bot = min(y + 6, int(center_y + half_h))
+                draw.rectangle((x + i * 2, bar_top, x + i * 2, bar_bot), fill=GREEN)
 
     def _draw_lyrics(self, img: Image.Image, draw: ImageDraw.Draw, lyrics: dict, progress_ms: int, y_offset: int = 24, fill=WHITE):
         lines = lyrics['lyrics']['lines']
