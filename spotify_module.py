@@ -85,6 +85,14 @@ class SpotifyModule:
             return info
 
         except SpotifyException as e:
+            if getattr(e, 'http_status', 0) == 401 and self.spotify:
+                try:
+                    token_info = self.spotify.auth_manager.cache_handler.get_cached_token()
+                    if token_info and 'refresh_token' in token_info:
+                        print("Spotify 401 - Forcing token refresh")
+                        self.spotify.auth_manager.refresh_access_token(token_info['refresh_token'])
+                except Exception as refresh_err:
+                    print(f"Failed to force token refresh: {refresh_err}")
             self._handle_rate_limit(e)
             return None
         except Exception as e:
