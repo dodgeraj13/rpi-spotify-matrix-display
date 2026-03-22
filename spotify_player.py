@@ -61,7 +61,7 @@ class SpotifyPlayer:
         self.current_track_id = None
         self.slide_active = False
         self.slide_frames = 0
-        self.total_slide_frames = 16 
+        self.total_slide_frames = 24
         self.slide_direction = 1
         self.prev_frame_snapshot: Optional[Image.Image] = None
         self.last_generated_frame: Optional[Image.Image] = None
@@ -587,7 +587,7 @@ class SpotifyPlayer:
         raw_words = current_line.split()
         out = []
         cur_line = ""
-        max_w = W - 2 # 1px padding on each side (x=1 to x=62)
+        max_w = W - 4 # 1px padding on each side (x=1 to x=62)
 
         for word in raw_words:
             # 1. Try to add the whole word naturally
@@ -641,4 +641,4 @@ class SpotifyPlayer:
             y = y_offset + (i * line_h)
             if y + line_h > H:
                 break
-            draw.text((1, y), line_str, fill=fill, font=self.font)
+            draw.text((2, y), line_str, fill=fill, font=self.font)
