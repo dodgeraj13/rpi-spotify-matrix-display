@@ -72,18 +72,14 @@ def main():
         target_fps = 50
         target_frame_time = 1.0 / target_fps
         
-        canvas = matrix.CreateFrameCanvas()
-        
         while True:
             start_time = time.time()
             frame = spotify_player.generate()
             
             if frame:
-                canvas.SetImage(frame)
+                matrix.SetImage(frame)
             else:
-                canvas.Clear()
-                
-            canvas = matrix.SwapOnVSync(canvas)
+                matrix.Clear()
             
             # Precise timing: sleep for the remainder of the interval
             elapsed = time.time() - start_time
