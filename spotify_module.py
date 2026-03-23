@@ -31,7 +31,7 @@ class SpotifyModule:
         self.queue = LifoQueue()
         self.spotify: Optional[spotipy.Spotify] = None
         self.ll: Optional[LibreLyrics] = None
-        self.last_track_id = None
+        self.last_track_id: Optional[str] = None
         self.last_lyrics: Optional[dict] = None
         self.device_whitelist = self._parse_whitelist(config)
         self.rate_limit_until = 0.0
@@ -154,6 +154,7 @@ class SpotifyModule:
                 except Exception as e:
                     print(f"fetch_lyrics failed for {track_id}: {e}")
                     self.last_lyrics = None
+                    self.last_track_id = track_id
                 finally:
                     self._fetching_lyrics_id = None
             
