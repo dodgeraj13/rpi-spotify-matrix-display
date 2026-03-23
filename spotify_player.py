@@ -60,16 +60,14 @@ class SpotifyPlayer:
         self.track_history = []
         self.current_track_id = None
         self.slide_active = False
-        self.slide_start_time = 0.0
-        self.slide_duration = 0.48
+        self.slide_frames = 0
+        self.total_slide_frames = 24
         self.slide_direction = 1
         self.prev_frame_snapshot: Optional[Image.Image] = None
         self.last_generated_frame: Optional[Image.Image] = None
 
-        self.lyrics_transition_progress = 0.0
-        self.lyrics_transition_duration = 0.56
-        self.lyrics_transition_frames = 0.0
-        self.last_frame_time = time.time()
+        self.lyrics_transition_frames = 0
+        self.max_lyrics_transition_frames = 28
 
         self.last_is_playing_state = None
         self.play_show_time = 0.0
@@ -141,9 +139,6 @@ class SpotifyPlayer:
     def _generate_frame(self, response: Optional[PlaybackInfo], now: float) -> Optional[Image.Image]:
         if not response:
             return self.black_screen
-            
-        delta_time = now - getattr(self, 'last_frame_time', now)
-        self.last_frame_time = now
 
         if response.is_playing != self.last_is_playing_state:
             self.play_show_time = now
@@ -161,7 +156,7 @@ class SpotifyPlayer:
         if response.track_id and response.track_id != self.current_track_id:
             # This triggers the snapshot of the OLD frame (last_generated_frame)
             # and starts the slide_active flag.
-            self._handle_track_change(response.track_id, now)
+            self._handle_track_change(response.track_id)
 
         progress_ms = response.progress_ms
         if self.response_timestamp > 0 and response.is_playing:
@@ -190,18 +185,18 @@ class SpotifyPlayer:
         if self.always_fullscreen or is_paused_long:
             target_frame = self._generate_fullscreen_frame(progress_ms, duration_ms, response.art_url)
         else:
-            target_frame = self._generate_normal_frame(response, progress_ms, duration_ms, now, delta_time)
+            target_frame = self._generate_normal_frame(response, progress_ms, duration_ms, now)
 
         if self.slide_active:
-            return self._generate_slide_transition(target_frame, now)
+            return self._generate_slide_transition(target_frame)
         
         return target_frame
 
-    def _handle_track_change(self, new_track_id: str, now: float):
+    def _handle_track_change(self, new_track_id: str):
         if self.current_track_id is not None:
             self.slide_active = True
-            self.slide_start_time = now
-            self.lyrics_transition_progress = 0.0
+            self.slide_frames = 0
+            self.lyrics_transition_frames = 0
             self.prev_frame_snapshot = self.last_generated_frame or self.black_screen.copy()
             
             self.slide_direction = 1
@@ -220,9 +215,8 @@ class SpotifyPlayer:
             if len(self.track_history) > 20:
                 self.track_history.pop(0)
 
-    def _generate_slide_transition(self, target_frame: Image.Image, now: float) -> Image.Image:
-        elapsed = now - self.slide_start_time
-        progress = min(1.0, elapsed / self.slide_duration)
+    def _generate_slide_transition(self, target_frame: Image.Image) -> Image.Image:
+        progress = self.slide_frames / self.total_slide_frames
         offset = int(W * progress)
         
         composite = Image.new("RGB", (W, H), (0, 0, 0))
@@ -234,9 +228,10 @@ class SpotifyPlayer:
             composite.paste(self.prev_frame_snapshot, (offset, 0))
             composite.paste(target_frame, (-W + offset, 0))
 
-        if progress >= 1.0:
+        self.slide_frames += 1
+        if self.slide_frames >= self.total_slide_frames:
             self.slide_active = False
-            self.slide_finish_time = now
+            self.slide_finish_time = time.time()
             
         return composite
 
@@ -251,7 +246,7 @@ class SpotifyPlayer:
 
         return img
 
-    def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int, now: float, delta_time: float) -> Image.Image:
+    def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int, now: float) -> Image.Image:
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
@@ -269,27 +264,26 @@ class SpotifyPlayer:
             if current_line and current_line != "♪":
                 has_lyrics_now = True
 
-        prev_lyrics_progress = self.lyrics_transition_progress
+        prev_lyrics_frames = self.lyrics_transition_frames
         if has_lyrics_now and response.is_playing and not self.slide_active and (now - self.slide_finish_time > 0.4):
-            self.lyrics_transition_progress = min(1.0, self.lyrics_transition_progress + (delta_time / self.lyrics_transition_duration))
+            if self.lyrics_transition_frames < self.max_lyrics_transition_frames:
+                self.lyrics_transition_frames += 1
         else:
-            self.lyrics_transition_progress = max(0.0, self.lyrics_transition_progress - (delta_time / self.lyrics_transition_duration))
+            if self.lyrics_transition_frames > 0:
+                self.lyrics_transition_frames -= 1
 
         # Track direction to decide which button position to show.
         # Switch to lyrics position the moment frames increase; revert the moment they decrease.
-        if self.lyrics_transition_progress > prev_lyrics_progress:
+        if self.lyrics_transition_frames > prev_lyrics_frames:
             self.lyrics_mode_active = True
-        elif self.lyrics_transition_progress < prev_lyrics_progress:
+        elif self.lyrics_transition_frames < prev_lyrics_frames:
             self.lyrics_mode_active = False
 
-        # Total normalized progress (0.0 to 1.0 over lyrics duration)
-        t_total = self.lyrics_transition_progress
+        # Total normalized progress (0.0 to 1.0 over 28 frames)
+        t_total = self.lyrics_transition_frames / self.max_lyrics_transition_frames
         # Ensure we exit lyrics mode definitively when the transition is complete
-        if t_total == 0.0:
+        if t_total == 0:
             self.lyrics_mode_active = False
-            
-        # Abstract frames for layout
-        self.lyrics_transition_frames = self.lyrics_transition_progress * 28.0
         
         # Art & Header transition (Locked to first 16 frames)
         art_t = min(1.0, self.lyrics_transition_frames / 16.0)
