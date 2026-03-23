@@ -177,6 +177,8 @@ class SpotifyPlayer:
         if not response.lyrics or response.lyrics.get('lyrics', {}).get('syncType') != 'LINE_SYNCED':
             return False
             
+        anim_time_ms = int((self.max_lyrics_frames / self.target_fps) * 1000)
+            
         lines = response.lyrics['lyrics']['lines']
         current_line = None
         current_idx: int = -1
@@ -195,7 +197,7 @@ class SpotifyPlayer:
                 if l_text and l_text != "♪":
                     next_lyric_ms = int(line['startTimeMs'])
                     break
-            if next_lyric_ms is not None and next_lyric_ms - progress_ms <= 1500:
+            if next_lyric_ms is not None and next_lyric_ms - progress_ms <= anim_time_ms:
                 return True
             return False
             
@@ -218,7 +220,7 @@ class SpotifyPlayer:
             if n_lyric_ms - pause_start_ms <= 5000:
                 return True
             # For longer pauses, start expanding earlier so it's ready when vocals hit
-            if n_lyric_ms - progress_ms <= 1500:
+            if n_lyric_ms - progress_ms <= anim_time_ms:
                 return True
                 
         return False
