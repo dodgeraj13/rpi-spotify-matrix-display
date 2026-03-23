@@ -16,142 +16,8 @@ W, H = 64, 64
 WHITE = (255, 255, 255)
 GREEN = (102, 240, 110)
 
-class ArtCache:
-    def __init__(self):
-        self._cache = {}
-        self._fetching_url = None
+from components import ArtCache, ScrollManager, TransitionManager
 
-    def get(self, url, size=None):
-        data = self._cache.get(url)
-        if not data or 'orig' not in data: return None
-        if size is None: return data['orig']
-        if size not in data:
-            data[size] = data['orig'].resize((size, size), Image.LANCZOS)
-        return data[size]
-
-    def fetch(self, url, safe_urls):
-        if not url or url in self._cache or self._fetching_url == url: return
-        self._fetching_url = url
-        def _fetch():
-            try:
-                r = requests.get(url, timeout=10)
-                r.raise_for_status()
-                img = Image.open(BytesIO(r.content)).convert("RGB")
-                width, height = img.size
-                if width != height:
-                    sz = min(width, height)
-                    l, t = (width - sz) // 2, (height - sz) // 2
-                    img = img.crop((l, t, l + sz, t + sz))
-                self._cache[url] = {'orig': img}
-                
-                keys = list(self._cache.keys())
-                for k in keys:
-                    if len(self._cache) <= 4: break
-                    if k not in safe_urls and k != url:
-                        del self._cache[k]
-            except Exception as e:
-                print(f"Error fetching image {url}: {e}")
-            finally:
-                self._fetching_url = None
-        threading.Thread(target=_fetch, daemon=True).start()
-
-    @property
-    def is_fetching(self):
-        return self._fetching_url is not None
-
-class ScrollManager:
-    def __init__(self, font, scroll_delay):
-        self.font = font
-        self.scroll_delay = scroll_delay
-        self.title_limit = 0
-        self.artist_limit = 0
-        self.title_pos = 0.0
-        self.artist_pos = 0.0
-        self.is_scrolling = False
-        self.last_scroll_end = time.time()
-        self.last_cycle_start = time.time()
-
-    def update_limits(self, title, artist, stable_width):
-        spacer = "     "
-        t_w = self.font.getlength(title) if title else 0
-        a_w = self.font.getlength(artist) if artist else 0
-        
-        self.title_limit = self.font.getlength(title + spacer) if t_w > stable_width else 0
-        self.artist_limit = self.font.getlength(artist + spacer) if a_w > stable_width else 0
-        
-        self.is_scrolling = False
-        self.title_pos = self.artist_pos = 0.0
-        self.last_scroll_end = time.time()
-
-    def update(self, t_progress, now):
-        if not self.is_scrolling:
-            if (self.title_limit > 0 or self.artist_limit > 0) and (now - self.last_scroll_end >= self.scroll_delay):
-                if not (0.0 < t_progress < 1.0):
-                    self.is_scrolling = True
-                    self.last_cycle_start = now
-        
-        if self.is_scrolling:
-            elapsed = now - self.last_cycle_start
-            speed = 15.0
-            self.title_pos = elapsed * speed if self.title_limit > 0 else 0.0
-            self.artist_pos = elapsed * speed if self.artist_limit > 0 else 0.0
-            
-            t_done = self.title_limit == 0 or self.title_pos >= self.title_limit
-            a_done = self.artist_limit == 0 or self.artist_pos >= self.artist_limit
-            
-            if t_done and a_done:
-                self.is_scrolling = False
-                self.title_pos = self.artist_pos = 0.0
-                self.last_scroll_end = now
-        else:
-            self.title_pos = self.artist_pos = 0.0
-
-        return int(round(self.title_pos)), int(round(self.artist_pos))
-
-class TransitionManager:
-    def __init__(self):
-        self.active = False
-        self.frames = 0
-        self.total_frames = 24
-        self.direction = 1
-        self.snapshot = None
-        self.finish_time = 0.0
-        self.history = []
-
-    def start(self, new_track_id, current_track_id, current_frame, black_screen):
-        self.active = True
-        self.frames = 0
-        self.snapshot = current_frame or black_screen
-        self.direction = 1
-        
-        if new_track_id in self.history and current_track_id in self.history:
-            if self.history.index(new_track_id) < self.history.index(current_track_id):
-                self.direction = -1
-
-    def update_history(self, track_id):
-        if track_id not in self.history:
-            self.history.append(track_id)
-            if len(self.history) > 20:
-                self.history.pop(0)
-
-    def generate_frame(self, target_frame):
-        progress = self.frames / self.total_frames
-        offset = int(W * progress)
-        comp = Image.new("RGB", (W, H), (0, 0, 0))
-        
-        if self.direction == 1:
-            comp.paste(self.snapshot, (-offset, 0))
-            comp.paste(target_frame, (W - offset, 0))
-        else:
-            comp.paste(self.snapshot, (offset, 0))
-            comp.paste(target_frame, (-W + offset, 0))
-
-        self.frames += 1
-        if self.frames >= self.total_frames:
-            self.active = False
-            self.finish_time = time.time()
-            
-        return comp
 
 class SpotifyPlayer:
     def __init__(self, config, spotify_module: SpotifyModule):
@@ -160,6 +26,7 @@ class SpotifyPlayer:
         self.fetch_interval = int(config.get('Matrix', 'fetch_interval', fallback='1'))
         self.shutdown_delay = int(config.get('Matrix', 'shutdown_delay', fallback='600'))
         scroll_delay = int(config.get('Matrix', 'scroll_delay', fallback='4'))
+        self.target_fps = config.getint('Matrix', 'target_fps', fallback=60)
 
         for p in [Path("font.otf"), Path(__file__).parent / "font.otf"]:
             if p.exists():
@@ -171,7 +38,7 @@ class SpotifyPlayer:
         self.black_screen = Image.new("RGB", (W, H), (0, 0, 0))
         self.art_cache = ArtCache()
         self.scroll = ScrollManager(self.font, scroll_delay)
-        self.transition = TransitionManager()
+        self.transition = TransitionManager(self.target_fps)
 
         self.current_title = ''
         self.current_artist = ''
@@ -207,7 +74,7 @@ class SpotifyPlayer:
                 elapsed = time.time() - start_time
                 time.sleep(max(0.0, self.fetch_interval - elapsed))
 
-    def generate(self):
+    def generate(self, dt: float):
         now = time.time()
         self._process_queue(now)
         
@@ -217,7 +84,7 @@ class SpotifyPlayer:
             self.response_progress_ms = self.response.progress_ms
             self.pending_response = None
 
-        frame = self._generate_frame(self.response, now)
+        frame = self._generate_frame(self.response, now, dt)
         self.last_generated_frame = frame
         return frame
 
@@ -244,7 +111,7 @@ class SpotifyPlayer:
         if self.pending_response and self.pending_response.art_url: safe.append(self.pending_response.art_url)
         self.art_cache.fetch(art_url, safe)
 
-    def _generate_frame(self, response: Optional[PlaybackInfo], now: float) -> Optional[Image.Image]:
+    def _generate_frame(self, response: Optional[PlaybackInfo], now: float, dt: float) -> Optional[Image.Image]:
         if not response: return self.black_screen
 
         if response.is_playing != self.last_is_playing:
@@ -282,10 +149,10 @@ class SpotifyPlayer:
         if self.always_fullscreen or is_paused_long:
             target_frame = self._generate_fullscreen_frame(response.art_url)
         else:
-            target_frame = self._generate_normal_frame(response, progress_ms, duration_ms, now)
+            target_frame = self._generate_normal_frame(response, progress_ms, duration_ms, now, dt)
 
         if self.transition.active:
-            return self.transition.generate_frame(target_frame)
+            return self.transition.generate_frame(target_frame, dt)
         return target_frame
 
     def _generate_fullscreen_frame(self, target_url: str) -> Image.Image:
@@ -304,15 +171,17 @@ class SpotifyPlayer:
             else: break
         return bool(text and text != "♪")
 
-    def _update_lyrics_state(self, response, progress_ms, now):
+    def _update_lyrics_state(self, response, progress_ms, now, dt):
         has_lyrics = self._has_current_lyrics(response, progress_ms)
         prev_frames = self.lyrics_frames
         
+        frames_to_add = dt * self.target_fps
+        
         if has_lyrics and response.is_playing and not self.transition.active and (now - self.transition.finish_time > 0.4):
             if self.lyrics_frames < self.max_lyrics_frames:
-                self.lyrics_frames += 1
+                self.lyrics_frames = min(self.max_lyrics_frames, self.lyrics_frames + frames_to_add)
         elif self.lyrics_frames > 0:
-            self.lyrics_frames -= 1
+            self.lyrics_frames = max(0.0, self.lyrics_frames - frames_to_add)
 
         if self.lyrics_frames > prev_frames: self.lyrics_active = True
         elif self.lyrics_frames < prev_frames: self.lyrics_active = False
@@ -320,11 +189,11 @@ class SpotifyPlayer:
 
         return has_lyrics
 
-    def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int, now: float) -> Image.Image:
+    def _generate_normal_frame(self, response: PlaybackInfo, progress_ms: int, duration_ms: int, now: float, dt: float) -> Image.Image:
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        has_lyrics_now = self._update_lyrics_state(response, progress_ms, now)
+        has_lyrics_now = self._update_lyrics_state(response, progress_ms, now, dt)
         t_total = self.lyrics_frames / self.max_lyrics_frames
         art_t = min(1.0, self.lyrics_frames / 16.0)
         

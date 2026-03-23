@@ -48,7 +48,7 @@ def setup_matrix(config: configparser.ConfigParser, is_emulated: bool):
     options.cols = 64
     options.brightness = 100 if is_emulated else config.getint('Matrix', 'brightness', fallback=100)
     options.gpio_slowdown = config.getint('Matrix', 'gpio_slowdown', fallback=1)
-    options.limit_refresh_rate_hz = config.getint('Matrix', 'limit_refresh_rate_hz', fallback=0)
+    options.limit_refresh_rate_hz = 0
     options.drop_privileges = False
     
     return RGBMatrix(options=options)
@@ -69,22 +69,32 @@ def main():
         spotify_module = SpotifyModule(config)
         spotify_player = SpotifyPlayer(config, spotify_module)
         
-        target_fps = 50
+        target_fps = config.getint('Matrix', 'target_fps', fallback=60)
         target_frame_time = 1.0 / target_fps
         
+        next_frame_time = time.perf_counter()
+        last_time = next_frame_time
+        
         while True:
-            start_time = time.time()
-            frame = spotify_player.generate()
+            now = time.perf_counter()
+            delta_time = now - last_time
+            last_time = now
+            
+            frame = spotify_player.generate(delta_time)
             
             if frame:
                 matrix.SetImage(frame)
             else:
                 matrix.Clear()
             
-            # Precise timing: sleep for the remainder of the interval
-            elapsed = time.time() - start_time
-            sleep_time = max(0.0, float(target_frame_time - elapsed))
-            time.sleep(sleep_time)
+            now = time.perf_counter()
+            sleep_time = next_frame_time - now
+            
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+                next_frame_time += target_frame_time
+            else:
+                next_frame_time = now + target_frame_time
             
     except KeyboardInterrupt:
         print(' Interrupted with Ctrl-C')
