@@ -25,7 +25,7 @@ class SpotifyPlayer:
         self.always_fullscreen = config.getboolean('Matrix', 'always_fullscreen', fallback=False)
         self.fetch_interval = int(config.get('Matrix', 'fetch_interval', fallback='1'))
         self.shutdown_delay = int(config.get('Matrix', 'shutdown_delay', fallback='600'))
-        scroll_delay = int(config.get('Matrix', 'scroll_delay', fallback='4'))
+        self.scroll_delay = int(config.get('Matrix', 'scroll_delay', fallback='4'))
         self.target_fps = config.getint('Matrix', 'target_fps', fallback=60)
 
         for p in [Path("font.otf"), Path(__file__).parent / "font.otf"]:
@@ -37,7 +37,7 @@ class SpotifyPlayer:
 
         self.black_screen = Image.new("RGB", (W, H), (0, 0, 0))
         self.art_cache = ArtCache()
-        self.scroll = ScrollManager(self.font, scroll_delay)
+        self.scroll = ScrollManager(self.font, self.scroll_delay)
         self.transition = TransitionManager(self.target_fps)
 
         self.current_title = ''
@@ -59,6 +59,9 @@ class SpotifyPlayer:
         
         self.last_is_playing = None
         self.play_show_time = 0.0
+        
+        self._last_prog_ms = 0
+        self._last_track_prog = None
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -137,6 +140,13 @@ class SpotifyPlayer:
 
         duration_ms = response.duration_ms
         if duration_ms > 0: progress_ms = min(progress_ms, duration_ms)
+
+        # Prevent small backward jumps in progress to avoid lyric animation glitches
+        if hasattr(self, '_last_prog_ms') and getattr(self, '_last_track_prog', None) == response.track_id:
+            if 0 < self._last_prog_ms - progress_ms < 3000:
+                progress_ms = self._last_prog_ms
+        self._last_prog_ms = progress_ms
+        self._last_track_prog = response.track_id
 
         if self.current_title != response.title or self.current_artist != response.artist:
             self.current_artist, self.current_title = response.artist, response.title
