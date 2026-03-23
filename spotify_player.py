@@ -174,12 +174,52 @@ class SpotifyPlayer:
     def _has_current_lyrics(self, response, progress_ms):
         if not response.lyrics or response.lyrics.get('lyrics', {}).get('syncType') != 'LINE_SYNCED':
             return False
-        text = None
-        for line in response.lyrics['lyrics']['lines']:
+            
+        lines = response.lyrics['lyrics']['lines']
+        current_line = None
+        current_idx: int = -1
+        
+        for i, line in enumerate(lines):
             if int(line['startTimeMs']) <= progress_ms:
-                text = line['words'].strip()
+                current_line = line
+                current_idx = int(i)
             else: break
-        return bool(text and text != "♪")
+            
+        if not current_line:
+            # Before the first lyric line
+            next_lyric_ms = None
+            for line in lines:
+                l_text = line['words'].strip()
+                if l_text and l_text != "♪":
+                    next_lyric_ms = int(line['startTimeMs'])
+                    break
+            if next_lyric_ms is not None and next_lyric_ms - progress_ms <= 1500:
+                return True
+            return False
+            
+        text = current_line['words'].strip()
+        if text and text != "♪":
+            return True
+            
+        # We are on a pause line (empty or "♪"). Check how long this pause is.
+        next_lyric_ms = None
+        for j in range(int(current_idx) + 1, len(lines)):
+            l_text = lines[j]['words'].strip()
+            if l_text and l_text != "♪":
+                next_lyric_ms = int(lines[j]['startTimeMs'])
+                break
+                
+        if next_lyric_ms is not None:
+            n_lyric_ms: int = next_lyric_ms or 0
+            pause_start_ms = int(current_line['startTimeMs'])
+            # If the pause is short (<= 5 seconds), don't collapse lyrics mode
+            if n_lyric_ms - pause_start_ms <= 5000:
+                return True
+            # For longer pauses, start expanding earlier so it's ready when vocals hit
+            if n_lyric_ms - progress_ms <= 1500:
+                return True
+                
+        return False
 
     def _update_lyrics_state(self, response, progress_ms, now, dt):
         has_lyrics = self._has_current_lyrics(response, progress_ms)
