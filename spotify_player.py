@@ -35,8 +35,6 @@ class SpotifyPlayer:
 
         self.current_art_url = ''
         self.current_art_img: Optional[Image.Image] = None
-        self.fetched_art_url: Optional[str] = None
-        self.fetched_art_img: Optional[Image.Image] = None
         self.current_title = ''
         self.current_artist = ''
         self.title_animation_cnt = 0
@@ -126,26 +124,8 @@ class SpotifyPlayer:
         if self.pending_response:
             # Art is ready if the URL matches what we fetched OR if fetcher failed/finished
             # We track progress by checking if _fetching_art_url has cleared back to None
-            
-            # Lyrics are ready if the background thread has processed the track ID (success or fail)
-            lyrics_ready = self.spotify_module.last_track_id == self.pending_response.track_id
-            
-            if self._fetching_art_url is None and lyrics_ready:
-                # Attach the completed lyrics evaluation right before transitioning
-                self.pending_response.lyrics = self.spotify_module.last_lyrics
-                
-                if getattr(self, 'fetched_art_url', None) == self.pending_response.art_url:
-                    self.current_art_img = getattr(self, 'fetched_art_img', None)
-                    self.current_art_url = self.fetched_art_url
-                    self.fetched_art_url = None
-                    self.fetched_art_img = None
-                    if len(self._art_cache) > 2:
-                        self._art_cache.clear()
-                elif not self.pending_response.art_url:
-                    self.current_art_url = ""
-                    self.current_art_img = None
-                
-                # Art and lyrics are fully ready. Trigger transition.
+            if self._fetching_art_url is None:
+                # Art is ready or failed. Trigger transition.
                 self.response = self.pending_response
                 self.response_timestamp = now
                 self.response_progress_ms = self.response.progress_ms
@@ -194,15 +174,6 @@ class SpotifyPlayer:
 
         self._update_track(response.artist, response.title, now)
         
-        # Apply fetched art to current track if it was requested (e.g. startup)
-        if getattr(self, 'fetched_art_url', None) == response.art_url:
-            self.current_art_img = getattr(self, 'fetched_art_img', None)
-            self.current_art_url = self.fetched_art_url
-            self.fetched_art_url = None
-            self.fetched_art_img = None
-            if len(self._art_cache) > 2:
-                self._art_cache.clear()
-
         # We don't call _update_art here anymore because it's managed 
         # in generate() to synchronize with the transition.
         # But for non-track-changing updates (same song), we should ensure art is set.
@@ -481,6 +452,8 @@ class SpotifyPlayer:
 
     def _update_art(self, art_url: str):
         if not art_url:
+            self.current_art_url = ""
+            self.current_art_img = None
             return
 
         if self.current_art_url != art_url and self._fetching_art_url != art_url:
@@ -488,11 +461,17 @@ class SpotifyPlayer:
             def fetcher():
                 try:
                     img = self._fetch_image(art_url)
-                    self.fetched_art_img = img
-                    self.fetched_art_url = art_url
+                    if img:
+                        self.current_art_img = img
+                        self.current_art_url = art_url
+                        # Clear old art from cache (keep it lean)
+                        if len(self._art_cache) > 2:
+                             self._art_cache.clear()
+                    else:
+                        # Fetch failed, allow transition anyway
+                        self.current_art_url = art_url
                 except Exception:
-                    self.fetched_art_img = None
-                    self.fetched_art_url = art_url
+                    self.current_art_url = art_url
                 finally:
                     self._fetching_art_url = None
                 
