@@ -33,8 +33,6 @@ class SpotifyPlayer:
         else:
             self.font = ImageFont.load_default()
 
-        self.current_art_url = ''
-        self.current_art_img: Optional[Image.Image] = None
         self.current_title = ''
         self.current_artist = ''
         self.title_animation_cnt = 0
@@ -78,7 +76,7 @@ class SpotifyPlayer:
         self.last_scroll_end_time = 0.0
         self.lyrics_mode_active = False  # True while button should be in lyrics position
         
-        self._art_cache = {} # url -> resized_map (size -> Image)
+        self._art_cache: dict = {} # url -> resized_map (size -> Image)
         self._fetching_art_url: Optional[str] = None
         self.pending_response: Optional[PlaybackInfo] = None
         
@@ -107,11 +105,11 @@ class SpotifyPlayer:
                 self.spotify_module.queue.queue.clear()
             
             if new_data:
-                # If it's a new track, don't swap 'self.response' yet.
-                # Put it in pending and wait for art fetch.
-                if self.response and self.response.track_id and new_data.track_id != self.response.track_id:
+                # If it's a new track or we have no response yet, put it in pending and wait for art fetch.
+                if self.response is None or (self.response.track_id and new_data.track_id != self.response.track_id):
                     self.pending_response = new_data
-                    self._update_art(new_data.art_url)
+                    if new_data.art_url and new_data.art_url not in self._art_cache:
+                        self._update_art(new_data.art_url)
                 else:
                     self.response = new_data
                     self.response_timestamp = now
@@ -169,10 +167,8 @@ class SpotifyPlayer:
 
         self._update_track(response.artist, response.title, now)
         
-        # We don't call _update_art here anymore because it's managed 
-        # in generate() to synchronize with the transition.
-        # But for non-track-changing updates (same song), we should ensure art is set.
-        if self.current_art_url != response.art_url and self._fetching_art_url is None:
+        # Ensure art is fetched for updates on the same song
+        if response.art_url and response.art_url not in self._art_cache and self._fetching_art_url != response.art_url:
              self._update_art(response.art_url)
 
         # Check for 10-second pause to trigger fullscreen art
@@ -238,11 +234,15 @@ class SpotifyPlayer:
     def _generate_fullscreen_frame(self, progress_ms: int, duration_ms: int, target_url: str) -> Image.Image:
         img = Image.new("RGB", (W, H), (0, 0, 0))
 
-        if self.current_art_img and self.current_art_url == target_url:
-            if self.current_art_img.size != (64, 64):
-                img.paste(self.current_art_img.resize((64, 64), Image.LANCZOS), (0, 0))
+        art_data = self._art_cache.get(target_url)
+        if art_data and 'orig' in art_data:
+            orig_img = art_data['orig']
+            if orig_img.size != (64, 64):
+                if 64 not in art_data:
+                    art_data[64] = orig_img.resize((64, 64), Image.LANCZOS)
+                img.paste(art_data[64], (0, 0))
             else:
-                img.paste(self.current_art_img, (0, 0))
+                img.paste(orig_img, (0, 0))
 
         return img
 
@@ -378,21 +378,18 @@ class SpotifyPlayer:
         # CLIP RIGHT: 1px padding
         draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
 
-        if self.current_art_img:
-            # We no longer need the 'current_art_url == response.art_url' check here
-            # because the slide only starts after they match.
+        art_data = self._art_cache.get(response.art_url)
+        if art_data and 'orig' in art_data:
             # No lyrics: 48x48 at (8, 14) [ends at 62]. Lyrics: 15x15 at (1, 1) [ends at 16].
             art_size = int(48 - (33 * art_t))
             art_x = int(8 - (7 * art_t))
             art_y = int(14 - (13 * art_t))
             
             # Use cached resized versions
-            cached_map = self._art_cache.get(self.current_art_url, {})
-            if art_size not in cached_map:
-                cached_map[art_size] = self.current_art_img.resize((art_size, art_size), Image.LANCZOS)
-                self._art_cache[self.current_art_url] = cached_map
+            if art_size not in art_data:
+                art_data[art_size] = art_data['orig'].resize((art_size, art_size), Image.LANCZOS)
             
-            img.paste(cached_map[art_size], (art_x, art_y))
+            img.paste(art_data[art_size], (art_x, art_y))
 
         # 5. Lyrics
         # Appear and fade in during the final phase (Starting at frame 23)
@@ -429,11 +426,11 @@ class SpotifyPlayer:
         spacer = "     "
         stable_width = W - 18
         
-        title_text = self.current_title or "Unknown Title"
-        artist_text = self.current_artist or "Unknown Artist"
+        title_text = self.current_title or ""
+        artist_text = self.current_artist or ""
         
-        title_p_width = self.font.getlength(title_text)
-        artist_p_width = self.font.getlength(artist_text)
+        title_p_width = self.font.getlength(title_text) if title_text else 0
+        artist_p_width = self.font.getlength(artist_text) if artist_text else 0
         
         self.title_limit = self.font.getlength(title_text + spacer) if title_p_width > stable_width else 0
         self.artist_limit = self.font.getlength(artist_text + spacer) if artist_p_width > stable_width else 0
@@ -446,26 +443,31 @@ class SpotifyPlayer:
 
     def _update_art(self, art_url: str):
         if not art_url:
-            self.current_art_url = ""
-            self.current_art_img = None
             return
 
-        if self.current_art_url != art_url and self._fetching_art_url != art_url:
+        if art_url not in self._art_cache and self._fetching_art_url != art_url:
             self._fetching_art_url = art_url
             def fetcher():
                 try:
                     img = self._fetch_image(art_url)
                     if img:
-                        self.current_art_img = img
-                        self.current_art_url = art_url
+                        self._art_cache[art_url] = {'orig': img}
                         # Clear old art from cache (keep it lean)
-                        if len(self._art_cache) > 2:
-                             self._art_cache.clear()
-                    else:
-                        # Fetch failed, allow transition anyway
-                        self.current_art_url = art_url
+                        if len(self._art_cache) > 4:
+                            keys = list(self._art_cache.keys())
+                            safe_urls = [art_url]
+                            
+                            r_url = getattr(self.response, 'art_url', None) if getattr(self, 'response', None) else None
+                            p_url = getattr(self.pending_response, 'art_url', None) if getattr(self, 'pending_response', None) else None
+                            
+                            if r_url: safe_urls.append(r_url)
+                            if p_url: safe_urls.append(p_url)
+                            
+                            for k in keys:
+                                if k not in safe_urls:
+                                    del self._art_cache[k]
                 except Exception:
-                    self.current_art_url = art_url
+                    pass
                 finally:
                     self._fetching_art_url = None
                 
@@ -541,7 +543,10 @@ class SpotifyPlayer:
         self.artist_animation_cnt = int(round(self.artist_animation_pos))
 
     def _draw_text(self, draw: ImageDraw.Draw, text: str, x: int, y: int, width: int, is_title: bool):
-        text = text or ("Unknown Title" if is_title else "Unknown Artist")
+        text = text or ""
+        if not text:
+            return
+
         spacer = "     "
         pixel_width = self.font.getlength(text)
 
