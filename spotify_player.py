@@ -143,8 +143,11 @@ class SpotifyPlayer:
 
         # Prevent small backward jumps in progress to avoid lyric animation glitches
         if hasattr(self, '_last_prog_ms') and getattr(self, '_last_track_prog', None) == response.track_id:
-            if 0 < self._last_prog_ms - progress_ms < 3000:
+            diff = self._last_prog_ms - progress_ms
+            if 0 < diff < 3000:
                 progress_ms = self._last_prog_ms
+            elif diff >= 3000:
+                self.play_show_time = now
         self._last_prog_ms = progress_ms
         self._last_track_prog = response.track_id
 
@@ -227,7 +230,11 @@ class SpotifyPlayer:
         
         frames_to_add = dt * self.target_fps
         
-        if has_lyrics and response.is_playing and not self.transition.active and (now - self.transition.finish_time > 0.4):
+        can_show = True
+        if self.transition.active or (now - self.transition.finish_time < 0.4): can_show = False
+        if now - self.play_show_time < 2.0: can_show = False
+        
+        if has_lyrics and response.is_playing and can_show:
             if self.lyrics_frames < self.max_lyrics_frames:
                 self.lyrics_frames = min(self.max_lyrics_frames, self.lyrics_frames + frames_to_add)
         elif self.lyrics_frames > 0:
@@ -303,6 +310,7 @@ class SpotifyPlayer:
             freeze = False
             if response.is_playing and (now - self.play_show_time < 2.0): freeze = True
             if not self.transition.active and (now - self.transition.finish_time < 2.0): freeze = True
+            if self.lyrics_frames > 0: freeze = False
             pad = 1 if t_total > 0 else 0
             draw.rectangle((box_left - pad, box_top - pad, box_right + pad, box_bottom + pad), fill=(0, 0, 0))
             self._draw_play_pause(draw, btn_x, btn_y, response.is_playing, freeze)
