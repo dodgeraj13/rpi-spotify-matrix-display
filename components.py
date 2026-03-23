@@ -83,8 +83,16 @@ class ScrollManager:
         if self.is_scrolling:
             elapsed = now - self.last_cycle_start
             speed = 15.0
-            self.title_pos = elapsed * speed if self.title_limit > 0 else 0.0
-            self.artist_pos = elapsed * speed if self.artist_limit > 0 else 0.0
+            
+            if self.title_limit > 0:
+                self.title_pos = min(elapsed * speed, self.title_limit)
+            else:
+                self.title_pos = 0.0
+                
+            if self.artist_limit > 0:
+                self.artist_pos = min(elapsed * speed, self.artist_limit)
+            else:
+                self.artist_pos = 0.0
             
             t_done = self.title_limit == 0 or self.title_pos >= self.title_limit
             a_done = self.artist_limit == 0 or self.artist_pos >= self.artist_limit
