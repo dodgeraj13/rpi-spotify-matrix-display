@@ -476,6 +476,16 @@ class SpotifyPlayer:
             r = requests.get(url, timeout=10)
             r.raise_for_status()
             img = Image.open(BytesIO(r.content)).convert("RGB")
+            
+            width, height = img.size
+            if width != height:
+                size = min(width, height)
+                left = (width - size) // 2
+                top = (height - size) // 2
+                right = left + size
+                bottom = top + size
+                img = img.crop((left, top, right, bottom))
+                
             return img
         except Exception as e:
             print(f"Error fetching image {url}: {e}")
