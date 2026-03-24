@@ -176,7 +176,7 @@ class PlayerLyrics:
         line_stagger_ms = 80
         drop_distance = 12
         
-        fade_out_duration_ms = 350
+        fade_out_duration_ms = 200
         fade_out_alpha = 1.0
         if next_line_start_ms:
             time_until_next = next_line_start_ms - progress_ms
