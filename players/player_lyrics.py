@@ -1,11 +1,11 @@
 from PIL import Image, ImageDraw
-from transitions import SlideTransition, ScaleTransition
+from transitions import SlideTransition, ScaleTransition, ease_out_back
 
 W, H = 64, 64
 
 class PlayerLyrics:
     @staticmethod
-    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_frames, max_lyrics_frames, has_lyrics_now):
+    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_frames, max_lyrics_frames, has_lyrics_now, lyric_transition_time, can_show_lyrics):
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
@@ -28,7 +28,7 @@ class PlayerLyrics:
 
         lyrics_text_start = int(max_lyrics_frames * 23 / 28)
         if lyrics_frames >= lyrics_text_start and has_lyrics_now:
-            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames)
+            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
 
         if t_total < 0.5:
             state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
@@ -109,18 +109,26 @@ class PlayerLyrics:
             components.progress_bar.draw(draw, progress_ms, duration_ms)
 
     @staticmethod
-    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames):
-        fade_start = int(max_lyrics_frames * 22 / 28.0)
-        fade_dur = max(1, max_lyrics_frames - fade_start)
-        c = int(255 * min(1.0, max(0, lyrics_frames - fade_start) / fade_dur))
-        fill = (c, c, c)
+    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
+        lyrics_text_start = int(max_lyrics_frames * 23 / 28)
+        
+        # Approximate time since the text appeared on screen.
+        # This allows even lyrics that are already active when the song starts 
+        # or when we switch to lyrics mode to still "rain in".
+        if can_show_lyrics:
+            ms_since_appear = max(0.0, (lyric_transition_time * 1000.0) - (lyrics_text_start * (1000.0 / 60.0)))
+        else:
+            # During transition-out, don't replay the rain animation
+            ms_since_appear = 10000.0
         
         text = None
+        current_line_start_ms = 0
         for line in lyrics['lyrics']['lines']:
             if int(line['startTimeMs']) <= progress_ms:
                 line_text = line['words'].strip()
                 if line_text and line_text != "♪":
                     text = line_text
+                    current_line_start_ms = int(line['startTimeMs'])
             else: break
         if not text: return
 
@@ -155,7 +163,27 @@ class PlayerLyrics:
                         rem = rem[1:]
         if cur: out.append(cur)
 
+        rain_duration_ms = 450
+        line_stagger_ms = 80
+        drop_distance = 12
+
         for i, line in enumerate(out):
-            y = y_offset + i * 6
+            # Anim is relative to min of song timing vs appearance timing
+            time_at_target_ms = progress_ms - current_line_start_ms
+            line_elapsed_ms = min(time_at_target_ms, ms_since_appear) - (i * line_stagger_ms)
+            
+            line_rain_t = max(0.0, min(1.0, line_elapsed_ms / rain_duration_ms))
+            
+            eased_t = ease_out_back(line_rain_t)
+            line_y_offset = -drop_distance * (1.0 - eased_t)
+            
+            # Fast alpha fade during drop
+            fill_c = int(255 * line_rain_t)
+            fill = (fill_c, fill_c, fill_c)
+
+            y = y_offset + i * 6 + line_y_offset
             if y + 6 > H: break
-            draw.text((2, y), line, fill=fill, font=font)
+            if y > -6:
+                draw.text((2, int(y)), line, fill=fill, font=font)
+
+

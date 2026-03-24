@@ -257,7 +257,8 @@ class SpotifyPlayer:
         elif lyrics_frames > 0:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, self.components,
-                lyrics_frames, max_lyrics_frames, showing_lyric
+                lyrics_frames, max_lyrics_frames, showing_lyric, 
+                lyric_transition_time, can_show_lyrics
             )
         
         return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components)
