@@ -237,24 +237,18 @@ class SpotifyPlayer:
         pause_delay = 10000
         lyrics_delay = 2000
 
+        if can_show_lyrics and lyrics_frames < max_lyrics_frames * 0.5:
+            t = self.lyrics_transition_start
+            show_play = response.is_playing and ((t - self.play_show_time < 2.1) or \
+                        (not self.player_transition.active and t - self.player_transition.finish_time < 2.1))
+
         if self.always_fullscreen or time_paused_ms > pause_delay:
             return PlayerFullscreen.generate(response, self.components)
-        elif time_playing_ms > lyrics_delay and showing_lyric and lyrics_frames > 0:
-            show_play = False
+        elif lyrics_frames > 0:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, self.components,
                 lyrics_frames, max_lyrics_frames, showing_lyric
             )
-        else:
-            if lyrics_frames <= 0: show_play = show_play
-            elif lyrics_frames > 0:
-                # We are still transitioning back to standard but the pseudocode simplified the else. 
-                # To maintain smooth rollback, we route to lyrics if frames > 0, but user said simple!
-                # I'll route through Lyrics with reversing frames to keep the transition! 
-                return PlayerLyrics.generate(
-                    response, progress_ms, duration_ms, show_play, self.components,
-                    lyrics_frames, max_lyrics_frames, showing_lyric
-                )
-            
-            return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components)
+        
+        return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components)
 

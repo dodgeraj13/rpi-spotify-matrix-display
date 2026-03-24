@@ -30,7 +30,10 @@ class PlayerLyrics:
         if lyrics_frames >= lyrics_text_start and has_lyrics_now:
             PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames)
 
-        state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
+        if t_total < 0.5:
+            state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
+        else:
+            state = "Active"
         components.play_indicator.draw(draw, state)
 
         return img
