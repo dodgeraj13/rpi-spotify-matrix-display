@@ -148,6 +148,7 @@ class SpotifyPlayer:
             self.was_showing_lyrics = False
             self.lyrics_transition_start = 0.0
             self._is_skip_back = False
+            self.play_show_time = now
 
         progress_ms = response.progress_ms
         if self.response_timestamp > 0 and response.is_playing:
