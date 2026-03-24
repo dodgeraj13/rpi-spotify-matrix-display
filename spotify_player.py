@@ -12,7 +12,7 @@ from spotify_module import SpotifyModule, PlaybackInfo
 W, H = 64, 64
 
 from components import ArtCache, ProgressBar, ScrollingText, AlbumArt, PlayIndicator
-from transitions.player_transition import PlayerTransition
+from transitions import PlayerTransition
 from players.player_fullscreen import PlayerFullscreen
 from players.player_standard import PlayerStandard
 from players.player_lyrics import PlayerLyrics
