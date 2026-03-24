@@ -74,6 +74,7 @@ class SpotifyPlayer:
         
         self.lyrics_transition_start = 0.0
         self.was_showing_lyrics = False
+        self._is_skip_back = False
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -146,6 +147,7 @@ class SpotifyPlayer:
             self.player_transition.update_history(response.track_id)
             self.was_showing_lyrics = False
             self.lyrics_transition_start = 0.0
+            self._is_skip_back = False
 
         progress_ms = response.progress_ms
         if self.response_timestamp > 0 and response.is_playing:
@@ -160,6 +162,7 @@ class SpotifyPlayer:
                 progress_ms = self._last_prog_ms
             elif diff >= 3000 and progress_ms < 3000:
                 self.play_show_time = now
+                self._is_skip_back = True
         self._last_prog_ms = progress_ms
         self._last_track_prog = response.track_id
         
@@ -214,9 +217,13 @@ class SpotifyPlayer:
 
         time_paused_ms = 0 if response.is_playing else int((now - self.last_playing_time) * 1000)
         time_playing_ms = int((now - max(self.play_show_time, self.player_transition.finish_time)) * 1000)
+        if time_playing_ms > 2000:
+            self._is_skip_back = False
 
         showing_lyric = self._has_current_lyrics(response, progress_ms)
-        can_show_lyrics = time_playing_ms > 2000 and response.is_playing and showing_lyric and not self.player_transition.active
+        is_skip_back = getattr(self, '_is_skip_back', False)
+        can_show_lyrics = (time_playing_ms > 2000 or self.was_showing_lyrics or is_skip_back) and \
+                          response.is_playing and showing_lyric and not self.player_transition.active
         
         if can_show_lyrics and not self.was_showing_lyrics:
             self.lyrics_transition_start = now
