@@ -1,0 +1,150 @@
+from PIL import Image, ImageDraw
+from transitions import SlideTransition, ScaleTransition, ResizeTransition
+
+W, H = 64, 64
+
+class PlayerLyrics:
+    @staticmethod
+    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_frames, max_lyrics_frames, has_lyrics_now):
+        img = Image.new("RGB", (W, H), (0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        t_total = lyrics_frames / max_lyrics_frames
+        art_t = min(1.0, lyrics_frames / 16.0)
+
+        PlayerLyrics._transition_scrolling_text(components, art_t, t_total)
+        PlayerLyrics._transition_album_art(components, art_t)
+        PlayerLyrics._transition_play_indicator(components, t_total)
+        
+        components.title_scroll.draw(draw)
+        components.artist_scroll.draw(draw)
+        
+        PlayerLyrics._draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames)
+
+        PlayerLyrics._draw_backgrounds(draw, components, art_t, t_total)
+        
+        components.album_art.draw(img, response.art_url)
+
+        if lyrics_frames >= 23 and has_lyrics_now:
+            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font)
+
+        state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
+        components.play_indicator.draw(draw, state)
+
+        return img
+
+    @staticmethod
+    def _transition_scrolling_text(components, art_t, t_total):
+        SlideTransition.apply(components.title_scroll, 1, 1, 17, 1, art_t)
+        SlideTransition.apply(components.artist_scroll, 1, 7, 17, 7, art_t)
+        
+        btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
+        text_width = btn_x - 3 - components.title_scroll.x - 1
+        
+        ResizeTransition.apply(components.title_scroll, 51, 6, text_width, 6, t_total)
+        ResizeTransition.apply(components.artist_scroll, 51, 6, text_width, 6, t_total)
+
+    @staticmethod
+    def _transition_album_art(components, art_t):
+        ScaleTransition.apply(components.album_art, 8, 14, 48, 48, 1, 1, 15, 15, art_t)
+
+    @staticmethod
+    def _transition_play_indicator(components, t_total):
+        SlideTransition.apply(components.play_indicator, W+3, 54, 56, 54, t_total)
+        components.play_indicator.width, components.play_indicator.height = 4, 6
+
+    @staticmethod
+    def _draw_backgrounds(draw, components, art_t, t_total):
+        text_x = components.title_scroll.x
+        btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
+        btn_y = 54
+        
+        box_left, box_right = btn_x - 3, btn_x + 9
+        box_top, box_bottom = btn_y - 3, btn_y + 9
+
+        if box_left < W and t_total == 0:
+            draw.rectangle((box_left, box_top, box_right, box_bottom), fill=(0, 0, 0))
+
+        if box_left < W and btn_x < W:
+            pad = 1 if t_total > 0 else 0
+            draw.rectangle((box_left - pad, box_top - pad, box_right + pad, box_bottom + pad), fill=(0, 0, 0))
+
+        if art_t > 0.5: 
+            draw.rectangle((0, 0, text_x - 1, 16), fill=(0, 0, 0))
+            
+        draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
+
+    @staticmethod
+    def _draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames):
+        text_x = components.title_scroll.x
+        btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
+        text_width = btn_x - 3 - text_x - 1
+        
+        if art_t < 0.5:
+            bar_y = 62 + int(art_t * 4)
+            if bar_y < 64:
+                SlideTransition.apply(components.progress_bar, 0, 62, 0, 66, art_t * 2)
+                components.progress_bar.draw(draw, progress_ms, duration_ms)
+
+        bar_width = W - text_x - 1 if t_total > 0 else text_width
+        
+        if lyrics_frames > 16:
+            green_w = round(bar_width * progress_ms / duration_ms) if duration_ms > 0 else 0
+            if lyrics_frames <= 22:
+                green_w = int(green_w * ((lyrics_frames - 16) / 6.0))
+                if green_w > 0: draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=(102, 240, 110))
+            else:
+                grey = int(100 * ((lyrics_frames - 22) / 6.0))
+                draw.rectangle((text_x, 14, text_x + bar_width - 1, 15), fill=(grey, grey, grey))
+                if green_w > 0: draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=(102, 240, 110))
+        elif t_total == 1.0:
+            components.progress_bar.x, components.progress_bar.y = text_x, 14
+            components.progress_bar.width, components.progress_bar.height = bar_width, 2
+            components.progress_bar.draw(draw, progress_ms, duration_ms)
+
+    @staticmethod
+    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font):
+        c = int(255 * min(1.0, (lyrics_frames - 22) / 6.0))
+        fill = (c, c, c)
+        
+        text = None
+        for line in lyrics['lyrics']['lines']:
+            if int(line['startTimeMs']) <= progress_ms: text = line['words'].strip()
+            else: break
+        if not text or text == "♪": return
+
+        words = text.split()
+        out, cur = [], ""
+        for word in words:
+            if font.getlength(f"{cur} {word}".strip()) <= W - 4:
+                cur = f"{cur} {word}".strip()
+            else:
+                if cur: out.append(cur)
+                cur, rem = "", word
+                while rem:
+                    if font.getlength(rem) <= W - 4:
+                        cur = rem
+                        break
+                    
+                    found = False
+                    for i in range(len(rem) - 1, 0, -1):
+                        if rem[i] == '-' and font.getlength(rem[:i+1]) <= W - 4:
+                            out.append(rem[:i+1])
+                            rem, found = rem[i+1:], True
+                            break
+                    if found: continue
+                    
+                    for i in range(len(rem) - 1, 0, -1):
+                        if font.getlength(rem[:i] + "-") <= W - 4:
+                            out.append(rem[:i] + "-")
+                            rem, found = rem[i:], True
+                            break
+                    if not found:
+                        out.append(rem[0])
+                        rem = rem[1:]
+        if cur: out.append(cur)
+
+        for i, line in enumerate(out):
+            y = y_offset + i * 6
+            if y + 6 > H: break
+            draw.text((2, y), line, fill=fill, font=font)
