@@ -1,8 +1,12 @@
 import time
 from PIL import Image
 from .easing import ease_out_back, ease_linear_back, SLIDE_FRAMES, BOUNCE_FRAMES
+from PIL import ImageDraw
 
 W, H = 64, 64
+
+# Artwork coordinates for the standard player
+ART_X, ART_Y, ART_W, ART_H = 8, 14, 48, 48
 
 class PlayerTransition:
     def __init__(self, target_fps: int):
@@ -33,18 +37,28 @@ class PlayerTransition:
 
     def generate_frame(self, target_frame, dt: float):
         progress = self.frames / self.total_frames
+        l_end = SLIDE_FRAMES / self.total_frames
         
-        # Keep original speed then bounce
-        progress_eased = ease_linear_back(progress, linear_end=(SLIDE_FRAMES / self.total_frames))
-        offset = int(W * progress_eased)
-        comp = Image.new("RGB", (W, H), (0, 0, 0))
+        # Calculate linear and eased offsets
+        o_l = int(W * min(1.0, progress / l_end))
+        o_e = int(W * ease_linear_back(progress, l_end))
         
-        if self.direction == 1:
-            comp.paste(self.snapshot, (-offset, 0))
-            comp.paste(target_frame, (W - offset, 0))
-        else:
-            comp.paste(self.snapshot, (offset, 0))
-            comp.paste(target_frame, (-W + offset, 0))
+        # Directional variables: d is movement sign, t_base is target starting position
+        d, t_base = (-1, W) if self.direction == 1 else (1, -W)
+        
+        comp = Image.new("RGB", (W, H), 0)
+        
+        # 1. Slide old track away linearly
+        comp.paste(self.snapshot, (d * o_l, 0))
+        
+        # 2. Slide new track background linearly (black out artwork area to avoid ghosting)
+        bg = target_frame.copy()
+        ImageDraw.Draw(bg).rectangle((ART_X, ART_Y, ART_X + ART_W - 1, ART_Y + ART_H - 1), fill=0)
+        comp.paste(bg, (t_base + d * o_l, 0))
+        
+        # 3. Slide artwork with rubberband effect
+        art = target_frame.crop((ART_X, ART_Y, ART_X + ART_W, ART_Y + ART_H))
+        comp.paste(art, (t_base + d * o_e + ART_X, ART_Y))
 
         self.frames += dt * self.target_fps
         if self.frames >= self.total_frames:
