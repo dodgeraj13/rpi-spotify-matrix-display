@@ -19,6 +19,12 @@ class ScrollingText:
         self.sync_group = []
         self.was_needs_scroll = False
 
+        self._scroll_x = x
+        self._scroll_text_width = 0
+
+    def _needs_scroll_for_width(self, w):
+        return self.base_text_width > w
+
     @property
     def text_width(self):
         return self.full_text_width if self.base_text_width > self.width else 0
@@ -34,6 +40,7 @@ class ScrollingText:
                 self.full_text_width = 0
             self.is_scrolling = False
             self.pos = 0.0
+            self._scroll_text_width = 0
             self.last_scroll_end = time.time()
 
     def update(self, now: float):
@@ -55,9 +62,9 @@ class ScrollingText:
         
         if self.is_scrolling:
             elapsed = now - self.last_cycle_start
-            self.pos = min(elapsed * self.scroll_speed, self.text_width) if self.text_width > 0 else 0.0
-            
-            done = self.text_width == 0 or self.pos >= self.text_width
+            self.pos = elapsed * self.scroll_speed
+            display_offset = (self.x - self._scroll_x) + self.pos
+            done = self._scroll_text_width == 0 or display_offset >= self._scroll_text_width
             if done:
                 self.end_scroll(now)
         else:
@@ -66,10 +73,13 @@ class ScrollingText:
     def start_scroll(self, now):
         self.is_scrolling = True
         self.last_cycle_start = now
+        self._scroll_x = self.x
+        self._scroll_text_width = self.full_text_width if self._needs_scroll_for_width(self.width) else 0
 
     def end_scroll(self, now):
         self.is_scrolling = False
         self.pos = 0.0
+        self._scroll_text_width = 0
         self.last_scroll_end = now
 
     def add_sync(self, other):
@@ -79,8 +89,12 @@ class ScrollingText:
 
     def draw(self, draw, color=(255, 255, 255)):
         if not self.text: return
-        offset = int(round(self.pos))
-        if self.text_width > 0:
-            draw.text((self.x - offset, self.y), self.text + "     " + self.text, fill=color, font=self.font)
+
+        if self.is_scrolling and self._scroll_text_width > 0:
+            display_offset = int(round((self.x - self._scroll_x) + self.pos))
+            draw.text((self.x - display_offset, self.y), self.text + "     " + self.text, fill=color, font=self.font)
+        elif self.text_width > 0:
+            draw.text((self.x, self.y), self.text + "     " + self.text, fill=color, font=self.font)
         else:
             draw.text((self.x, self.y), self.text, fill=color, font=self.font)
+
