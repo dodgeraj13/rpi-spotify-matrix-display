@@ -10,7 +10,8 @@ class PlayerLyrics:
         draw = ImageDraw.Draw(img)
 
         t_total = lyrics_frames / max_lyrics_frames
-        art_t = min(1.0, lyrics_frames / 16.0)
+        art_end = int(max_lyrics_frames * 16 / 28)
+        art_t = min(1.0, lyrics_frames / art_end) if art_end > 0 else 1.0
 
         PlayerLyrics._transition_scrolling_text(components, art_t, t_total)
         PlayerLyrics._transition_album_art(components, art_t)
@@ -19,14 +20,15 @@ class PlayerLyrics:
         components.title_scroll.draw(draw)
         components.artist_scroll.draw(draw)
         
-        PlayerLyrics._draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames)
+        PlayerLyrics._draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames, max_lyrics_frames)
 
         PlayerLyrics._draw_backgrounds(draw, components, art_t, t_total)
         
         components.album_art.draw(img, response.art_url)
 
-        if lyrics_frames >= 23 and has_lyrics_now:
-            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font)
+        lyrics_text_start = int(max_lyrics_frames * 23 / 28)
+        if lyrics_frames >= lyrics_text_start and has_lyrics_now:
+            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames)
 
         state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
         components.play_indicator.draw(draw, state)
@@ -72,7 +74,7 @@ class PlayerLyrics:
         draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
 
     @staticmethod
-    def _draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames):
+    def _draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames, max_lyrics_frames):
         text_x = components.title_scroll.x
         btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
         text_width = btn_x - 3 - text_x - 1
@@ -85,23 +87,29 @@ class PlayerLyrics:
 
         bar_width = W - text_x - 1 if t_total > 0 else text_width
         
-        if lyrics_frames > 16:
-            green_w = round(bar_width * progress_ms / duration_ms) if duration_ms > 0 else 0
-            if lyrics_frames <= 22:
-                green_w = int(green_w * ((lyrics_frames - 16) / 6.0))
-                if green_w > 0: draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=(102, 240, 110))
-            else:
-                grey = int(100 * ((lyrics_frames - 22) / 6.0))
-                draw.rectangle((text_x, 14, text_x + bar_width - 1, 15), fill=(grey, grey, grey))
-                if green_w > 0: draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=(102, 240, 110))
+        bar_start = int(max_lyrics_frames * 16 / 28.0)
+        bar_end = int(max_lyrics_frames)
+        
+        if lyrics_frames > bar_start:
+            grow_t = min(1.0, (lyrics_frames - bar_start) / max(1, bar_end - bar_start))
+            current_bar_width = int(bar_width * grow_t)
+            
+            if current_bar_width > 0:
+                draw.rectangle((text_x, 14, text_x + current_bar_width - 1, 15), fill=(100, 100, 100))
+                
+            green_w = round(current_bar_width * progress_ms / duration_ms) if duration_ms > 0 else 0
+            if green_w > 0:
+                draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=(102, 240, 110))
         elif t_total == 1.0:
             components.progress_bar.x, components.progress_bar.y = text_x, 14
             components.progress_bar.width, components.progress_bar.height = bar_width, 2
             components.progress_bar.draw(draw, progress_ms, duration_ms)
 
     @staticmethod
-    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font):
-        c = int(255 * min(1.0, (lyrics_frames - 22) / 6.0))
+    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames):
+        fade_start = int(max_lyrics_frames * 22 / 28.0)
+        fade_dur = max(1, max_lyrics_frames - fade_start)
+        c = int(255 * min(1.0, max(0, lyrics_frames - fade_start) / fade_dur))
         fill = (c, c, c)
         
         text = None

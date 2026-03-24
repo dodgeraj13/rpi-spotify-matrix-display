@@ -7,7 +7,7 @@ class PlayerTransition:
     def __init__(self, target_fps: int):
         self.active = False
         self.frames = 0
-        self.total_frames = 24
+        self.total_frames = 36
         self.target_fps = target_fps
         self.direction = 1
         self.snapshot = None

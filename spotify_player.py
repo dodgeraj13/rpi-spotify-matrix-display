@@ -226,7 +226,7 @@ class SpotifyPlayer:
         self.was_showing_lyrics = can_show_lyrics
             
         lyric_transition_time = now - self.lyrics_transition_start
-        max_lyrics_frames = 28
+        max_lyrics_frames = 42
         fps = float(self.target_fps)
 
         if can_show_lyrics:
