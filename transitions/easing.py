@@ -2,7 +2,7 @@ import math
 
 # Transition timings (frames @ 60fps)
 SLIDE_FRAMES = 36
-BOUNCE_FRAMES = 26
+BOUNCE_FRAMES = 28
 
 def ease_out_back(t: float, s: float = 1.70158) -> float:
     """Overshoots the target before returning to it (rubberband effect)."""
