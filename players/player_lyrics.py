@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw
-from transitions import SlideTransition, ScaleTransition
+from transitions import SlideTransition, ScaleTransition, ease_out_back, ease_linear_back
 
 W, H = 64, 64
 
@@ -10,8 +10,13 @@ class PlayerLyrics:
         draw = ImageDraw.Draw(img)
 
         t_total = lyrics_frames / max_lyrics_frames
-        art_end = int(max_lyrics_frames * 16 / 28)
-        art_t = min(1.0, lyrics_frames / art_end) if art_end > 0 else 1.0
+        art_slide_end = int(max_lyrics_frames * 16 / 28)
+        art_bounce_len = 12
+        art_end = art_slide_end + art_bounce_len
+        
+        # Calculate art_p to reach 1.0 exactly at art_slide_end (same speed as before)
+        art_p = min(1.0, lyrics_frames / art_end) if art_end > 0 else 1.0
+        art_t = ease_linear_back(art_p, linear_end=(float(art_slide_end)/art_end))
 
         PlayerLyrics._transition_scrolling_text(components, art_t, t_total)
         PlayerLyrics._transition_album_art(components, art_t)

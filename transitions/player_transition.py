@@ -1,5 +1,6 @@
 import time
 from PIL import Image
+from .easing import ease_out_back, ease_linear_back
 
 W, H = 64, 64
 
@@ -7,7 +8,7 @@ class PlayerTransition:
     def __init__(self, target_fps: int):
         self.active = False
         self.frames = 0
-        self.total_frames = 36
+        self.total_frames = 48
         self.target_fps = target_fps
         self.direction = 1
         self.snapshot = None
@@ -32,7 +33,10 @@ class PlayerTransition:
 
     def generate_frame(self, target_frame, dt: float):
         progress = self.frames / self.total_frames
-        offset = int(W * progress)
+        
+        # Keep original speed (36 frames) then bounce (12 extra frames)
+        progress_eased = ease_linear_back(progress, linear_end=(36.0/48.0))
+        offset = int(W * progress_eased)
         comp = Image.new("RGB", (W, H), (0, 0, 0))
         
         if self.direction == 1:
