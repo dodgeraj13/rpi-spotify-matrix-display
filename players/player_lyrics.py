@@ -133,6 +133,13 @@ class PlayerLyrics:
                 break
         
         if not text: return
+        
+        # For lyrics display entry: skip the current lyric if it was already playing
+        # and has less than 0.5s left from the moment it first appeared.
+        entry_progress_ms = progress_ms - ms_since_appear
+        if current_line_start_ms < entry_progress_ms and next_line_start_ms:
+            if next_line_start_ms - entry_progress_ms < 500:
+                return
 
         words = text.split()
         out, cur = [], ""
