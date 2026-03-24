@@ -9,8 +9,7 @@ from typing import Optional
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
-from librelyrics import LibreLyrics
-from librelyrics.exceptions import RateLimitError, LyricsNotFound
+from lyrics_fetcher import LyricsFetcher
 
 
 @dataclass
@@ -31,18 +30,13 @@ class SpotifyModule:
         self.config = config
         self.queue = LifoQueue()
         self.spotify: Optional[spotipy.Spotify] = None
-        self.ll: Optional[LibreLyrics] = None
-        self.last_track_id: Optional[str] = None
-        self.last_lyrics: Optional[dict] = None
+        self.lyrics_fetcher = LyricsFetcher(config)
         self.device_whitelist = self._parse_whitelist(config)
         self.rate_limit_until = 0.0
-        self.lyrics_rate_limit_until = 0.0
         self._device_cache: bool = True
         self._last_device_check: float = 0.0
-        self._fetching_lyrics_id: Optional[str] = None
         
         self._setup_spotify()
-        self._setup_librelyrics()
 
     def _setup_spotify(self):
         try:
@@ -61,17 +55,7 @@ class SpotifyModule:
         except Exception as e:
             print(f"Spotify setup failed: {e}")
 
-    def _setup_librelyrics(self):
-        sp_dc = self.config.get('Spotify', 'sp_dc', fallback=None)
-        if sp_dc:
-            try:
-                self.ll = LibreLyrics(config={'plugins': {'spotify': {'sp_dc': sp_dc}}})
-                print("LibreLyrics initialized successfully")
-            except Exception as e:
-                print(f"LibreLyrics setup failed: {e}")
-                import traceback
-                traceback.print_exc()
-                self.ll = None
+
 
     def get_current_playback(self) -> Optional[PlaybackInfo]:
         if not self.spotify or time.time() < self.rate_limit_until:
@@ -120,58 +104,9 @@ class SpotifyModule:
             is_playing=track['is_playing'],
             progress_ms=track.get('progress_ms', 0),
             duration_ms=item.get('duration_ms', 0),
-            lyrics=self._get_lyrics(item['id']),
+            lyrics=self.lyrics_fetcher.get_lyrics(item['id']),
             track_id=item['id']
         )
-
-    def _get_lyrics(self, track_id: str) -> Optional[dict]:
-        if not self.ll or not track_id:
-            return None
-            
-        if track_id != self.last_track_id:
-            if self._fetching_lyrics_id == track_id or time.time() < self.lyrics_rate_limit_until:
-                return None
-            
-            self._fetching_lyrics_id = track_id
-            
-            def fetch_thread():
-                try:
-                    res = self.ll.fetch(f"https://open.spotify.com/track/{track_id}")
-                    lines = []
-                    for line in res.lyrics:
-                        lines.append({
-                            'startTimeMs': line.start_ms if line.start_ms is not None else 0,
-                            'words': line.text
-                        })
-                    is_synced = any(line.start_ms is not None for line in res.lyrics)
-                    self.last_lyrics = {
-                        'lyrics': {
-                            'lines': lines,
-                            'syncType': 'LINE_SYNCED' if is_synced else 'UNSYNCED'
-                        }
-                    }
-                    self.last_track_id = track_id
-                except RateLimitError as e:
-                    retry = getattr(e, 'retry_after', 30) or 30
-                    self.lyrics_rate_limit_until = time.time() + retry
-                    print(f"fetch_lyrics rate limited for {track_id} (retry in {retry}s): {e}")
-                    self.last_lyrics = None
-                    self.last_track_id = track_id
-                except LyricsNotFound:
-                    self.last_lyrics = None
-                    self.last_track_id = track_id
-                except Exception as e:
-                    print(f"fetch_lyrics failed for {track_id}: {e}")
-                    self.last_lyrics = None
-                    self.last_track_id = track_id
-                finally:
-                    self._fetching_lyrics_id = None
-            
-            import threading
-            threading.Thread(target=fetch_thread, daemon=True).start()
-            return None
-            
-        return self.last_lyrics
 
     def _is_whitelisted_device(self) -> bool:
         if not self.device_whitelist:

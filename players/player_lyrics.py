@@ -117,9 +117,12 @@ class PlayerLyrics:
         
         text = None
         for line in lyrics['lyrics']['lines']:
-            if int(line['startTimeMs']) <= progress_ms: text = line['words'].strip()
+            if int(line['startTimeMs']) <= progress_ms:
+                line_text = line['words'].strip()
+                if line_text and line_text != "♪":
+                    text = line_text
             else: break
-        if not text or text == "♪": return
+        if not text: return
 
         words = text.split()
         out, cur = [], ""
