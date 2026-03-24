@@ -131,6 +131,8 @@ class SpotifyPlayer:
         if not response: return self.black_screen
 
         if response.is_playing != self.last_is_playing:
+            if response.is_playing and (now - self.last_playing_time) < 10.0:
+                self._is_skip_back = True
             self.play_show_time = now
         self.last_is_playing = response.is_playing
         self.is_playing = response.is_playing
