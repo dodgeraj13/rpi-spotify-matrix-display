@@ -10,6 +10,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
 from librelyrics import LibreLyrics
+from librelyrics.exceptions import RateLimitError, LyricsNotFound
 
 
 @dataclass
@@ -35,6 +36,7 @@ class SpotifyModule:
         self.last_lyrics: Optional[dict] = None
         self.device_whitelist = self._parse_whitelist(config)
         self.rate_limit_until = 0.0
+        self.lyrics_rate_limit_until = 0.0
         self._device_cache: bool = True
         self._last_device_check: float = 0.0
         self._fetching_lyrics_id: Optional[str] = None
@@ -96,7 +98,6 @@ class SpotifyModule:
             self._handle_rate_limit(e)
             return None
         except Exception as e:
-            # print(f"Error getting playback: {e}")
             return None
 
     def _process_track(self, track) -> PlaybackInfo:
@@ -104,7 +105,6 @@ class SpotifyModule:
         if not item:
              return PlaybackInfo(None, None, None, track['is_playing'], track.get('progress_ms', 0), 0)
 
-        # Simplify: Assume proper song structure
         artists = item['artists']
         artist_text = artists[0]['name']
         if len(artists) > 1:
@@ -129,8 +129,8 @@ class SpotifyModule:
             return None
             
         if track_id != self.last_track_id:
-            if self._fetching_lyrics_id == track_id:
-                return None # Still fetching
+            if self._fetching_lyrics_id == track_id or time.time() < self.lyrics_rate_limit_until:
+                return None
             
             self._fetching_lyrics_id = track_id
             
@@ -150,6 +150,15 @@ class SpotifyModule:
                             'syncType': 'LINE_SYNCED' if is_synced else 'UNSYNCED'
                         }
                     }
+                    self.last_track_id = track_id
+                except RateLimitError as e:
+                    retry = getattr(e, 'retry_after', 30) or 30
+                    self.lyrics_rate_limit_until = time.time() + retry
+                    print(f"fetch_lyrics rate limited for {track_id} (retry in {retry}s): {e}")
+                    self.last_lyrics = None
+                    self.last_track_id = track_id
+                except LyricsNotFound:
+                    self.last_lyrics = None
                     self.last_track_id = track_id
                 except Exception as e:
                     print(f"fetch_lyrics failed for {track_id}: {e}")
