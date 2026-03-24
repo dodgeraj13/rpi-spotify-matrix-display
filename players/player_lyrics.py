@@ -112,24 +112,26 @@ class PlayerLyrics:
     def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
         lyrics_text_start = int(max_lyrics_frames * 23 / 28)
         
-        # Approximate time since the text appeared on screen.
-        # This allows even lyrics that are already active when the song starts 
-        # or when we switch to lyrics mode to still "rain in".
+        # Determine the initial appearance delay (for rain-in entry).
         if can_show_lyrics:
             ms_since_appear = max(0.0, (lyric_transition_time * 1000.0) - (lyrics_text_start * (1000.0 / 60.0)))
         else:
-            # During transition-out, don't replay the rain animation
             ms_since_appear = 10000.0
         
         text = None
         current_line_start_ms = 0
+        next_line_start_ms = None
         for line in lyrics['lyrics']['lines']:
-            if int(line['startTimeMs']) <= progress_ms:
-                line_text = line['words'].strip()
+            start_ms = int(line['startTimeMs'])
+            line_text = line['words'].strip()
+            if start_ms <= progress_ms:
                 if line_text and line_text != "♪":
                     text = line_text
-                    current_line_start_ms = int(line['startTimeMs'])
-            else: break
+                    current_line_start_ms = start_ms
+            elif line_text and line_text != "♪":
+                next_line_start_ms = start_ms
+                break
+        
         if not text: return
 
         words = text.split()
@@ -166,6 +168,13 @@ class PlayerLyrics:
         rain_duration_ms = 450
         line_stagger_ms = 80
         drop_distance = 12
+        
+        fade_out_duration_ms = 350
+        fade_out_alpha = 1.0
+        if next_line_start_ms:
+            time_until_next = next_line_start_ms - progress_ms
+            if time_until_next < fade_out_duration_ms:
+                fade_out_alpha = max(0.0, time_until_next / fade_out_duration_ms)
 
         for i, line in enumerate(out):
             # Anim is relative to min of song timing vs appearance timing
@@ -177,8 +186,9 @@ class PlayerLyrics:
             eased_t = ease_out_back(line_rain_t)
             line_y_offset = -drop_distance * (1.0 - eased_t)
             
-            # Fast alpha fade during drop
-            fill_c = int(255 * line_rain_t)
+            # Combine rain-in and next-line fade-out
+            line_alpha = line_rain_t * fade_out_alpha
+            fill_c = int(255 * line_alpha)
             fill = (fill_c, fill_c, fill_c)
 
             y = y_offset + i * 6 + line_y_offset
