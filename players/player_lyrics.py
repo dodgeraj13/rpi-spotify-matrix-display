@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw
-from transitions import SlideTransition, ScaleTransition, ResizeTransition
+from transitions import SlideTransition, ScaleTransition
 
 W, H = 64, 64
 
@@ -38,11 +38,10 @@ class PlayerLyrics:
         SlideTransition.apply(components.title_scroll, 1, 1, 17, 1, art_t)
         SlideTransition.apply(components.artist_scroll, 1, 7, 17, 7, art_t)
         
-        btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
-        text_width = btn_x - 3 - components.title_scroll.x - 1
+        current_right = int(53 + (63 - 53) * art_t)
         
-        ResizeTransition.apply(components.title_scroll, 51, 6, text_width, 6, t_total)
-        ResizeTransition.apply(components.artist_scroll, 51, 6, text_width, 6, t_total)
+        components.title_scroll.width = current_right - components.title_scroll.x
+        components.artist_scroll.width = current_right - components.artist_scroll.x
 
     @staticmethod
     def _transition_album_art(components, art_t):
@@ -50,24 +49,22 @@ class PlayerLyrics:
 
     @staticmethod
     def _transition_play_indicator(components, t_total):
-        SlideTransition.apply(components.play_indicator, W+3, 54, 56, 54, t_total)
+        if t_total < 0.5:
+            sub_t = t_total * 2
+            SlideTransition.apply(components.play_indicator, 56, 3, W, 3, sub_t)
+        else:
+            sub_t = (t_total - 0.5) * 2
+            SlideTransition.apply(components.play_indicator, W, 54, 56, 54, sub_t)
         components.play_indicator.width, components.play_indicator.height = 4, 6
 
     @staticmethod
     def _draw_backgrounds(draw, components, art_t, t_total):
         text_x = components.title_scroll.x
-        btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
-        btn_y = 54
+        btn_x = components.play_indicator.x
+        btn_y = components.play_indicator.y
         
-        box_left, box_right = btn_x - 3, btn_x + 9
-        box_top, box_bottom = btn_y - 3, btn_y + 9
-
-        if box_left < W and t_total == 0:
-            draw.rectangle((box_left, box_top, box_right, box_bottom), fill=(0, 0, 0))
-
-        if box_left < W and btn_x < W:
-            pad = 1 if t_total > 0 else 0
-            draw.rectangle((box_left - pad, box_top - pad, box_right + pad, box_bottom + pad), fill=(0, 0, 0))
+        if btn_x < W:
+            draw.rectangle((btn_x - 3, btn_y - 3, W - 1, btn_y + 9), fill=(0, 0, 0))
 
         if art_t > 0.5: 
             draw.rectangle((0, 0, text_x - 1, 16), fill=(0, 0, 0))

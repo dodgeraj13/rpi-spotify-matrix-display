@@ -9,6 +9,7 @@ class PlayIndicator:
         self.height = height
 
     def draw(self, draw, state: str, color=(102, 240, 110)):
+        draw.rectangle((self.x - 2, self.y - 2, 63, self.y + self.height + 2), fill=(0, 0, 0))
         if state == "Paused":
             draw.rectangle((self.x, self.y, self.x + 1, self.y + 6), fill=color)
             draw.rectangle((self.x + 3, self.y, self.x + 4, self.y + 6), fill=color)

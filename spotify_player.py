@@ -42,11 +42,11 @@ class SpotifyPlayer:
         self.player_transition = PlayerTransition(self.target_fps)
 
         self.progress_bar = ProgressBar(0, 62, 64, 2)
-        self.title_scroll = ScrollingText(1, 1, 51, 6, self.scroll_speed, self.scroll_delay, self.font)
-        self.artist_scroll = ScrollingText(1, 7, 51, 6, self.scroll_speed, self.scroll_delay, self.font)
+        self.title_scroll = ScrollingText(1, 1, 52, 6, self.scroll_speed, self.scroll_delay, self.font)
+        self.artist_scroll = ScrollingText(1, 7, 52, 6, self.scroll_speed, self.scroll_delay, self.font)
         self.title_scroll.add_sync(self.artist_scroll)
         self.album_art = AlbumArt(8, 14, 48, 48, self.art_cache)
-        self.play_indicator = PlayIndicator(55, 3, 5, 7)
+        self.play_indicator = PlayIndicator(56, 3, 5, 7)
 
         self.components = ComponentsBox()
         self.components.progress_bar = self.progress_bar
