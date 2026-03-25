@@ -26,8 +26,7 @@ class PlayerLyrics:
         
         components.album_art.draw(img, response.art_url)
 
-        lyrics_text_start = int(max_lyrics_frames * 23 / 28)
-        if lyrics_frames >= lyrics_text_start and has_lyrics_now:
+        if (lyrics_frames > 0) and has_lyrics_now:
             PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
 
         if t_total < 0.5:
@@ -182,6 +181,12 @@ class PlayerLyrics:
             if time_until_next < fade_out_duration_ms:
                 fade_out_alpha = max(0.0, time_until_next / fade_out_duration_ms)
 
+        exit_fade_duration_ms = 200
+        exit_fade_alpha = 1.0
+        if not can_show_lyrics:
+            trans_ms = lyric_transition_time * 1000.0
+            exit_fade_alpha = max(0.0, 1.0 - (trans_ms / exit_fade_duration_ms))
+
         for i, line in enumerate(out):
             # Anim is relative to min of song timing vs appearance timing
             time_at_target_ms = progress_ms - current_line_start_ms
@@ -189,14 +194,14 @@ class PlayerLyrics:
             
             line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / fade_in_duration_ms))
             
-            # Combine fade-in and next-line fade-out
-            line_alpha = line_fade_in_t * fade_out_alpha
+            # Combine fade-in, next-line fade-out, and exit transition fade-out
+            line_alpha = line_fade_in_t * fade_out_alpha * exit_fade_alpha
             fill_c = int(255 * line_alpha)
             fill = (fill_c, fill_c, fill_c)
 
             y = y_offset + i * 6
             if y + 6 > H: break
-            if y > -6:
+            if y > -6 and fill_c > 0:
                 draw.text((2, int(y)), line, fill=fill, font=font)
 
 
