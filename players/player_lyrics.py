@@ -172,8 +172,8 @@ class PlayerLyrics:
                         rem = rem[1:]
         if cur: out.append(cur)
 
-        fade_in_duration_ms = 400
-        line_stagger_ms = 80
+        fade_in_duration_ms = 200
+        line_stagger_ms = 0
         
         fade_out_duration_ms = 200
         fade_out_alpha = 1.0
