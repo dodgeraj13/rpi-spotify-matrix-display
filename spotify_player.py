@@ -75,6 +75,8 @@ class SpotifyPlayer:
         self.lyrics_transition_start = 0.0
         self.was_showing_lyrics = False
         self._is_skip_back = False
+        self.fullscreen_transition_start = 0.0
+        self.was_fullscreen = False
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -150,6 +152,8 @@ class SpotifyPlayer:
             self.was_showing_lyrics = False
             self.lyrics_transition_start = 0.0
             self._is_skip_back = False
+            self.was_fullscreen = False
+            self.fullscreen_transition_start = 0.0
             self.play_show_time = now
 
         progress_ms = response.progress_ms
@@ -252,8 +256,18 @@ class SpotifyPlayer:
             show_play = response.is_playing and ((t - self.play_show_time < 2.1) or \
                         (not self.player_transition.active and t - self.player_transition.finish_time < 2.1))
 
-        if self.always_fullscreen or time_paused_ms > pause_delay:
-            return PlayerFullscreen.generate(response, self.components)
+        wants_fullscreen = self.always_fullscreen or time_paused_ms > pause_delay
+
+        if wants_fullscreen != self.was_fullscreen:
+            self.fullscreen_transition_start = now
+        self.was_fullscreen = wants_fullscreen
+
+        raw_t = min(1.0, (now - self.fullscreen_transition_start) / 0.5)
+        fullscreen_t = raw_t if wants_fullscreen else (1.0 - raw_t)
+
+        if wants_fullscreen or fullscreen_t > 0.0:
+            standard_frame = PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components)
+            return PlayerFullscreen.generate(response, self.components, fullscreen_t, standard_frame)
         elif lyrics_frames > 0:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, self.components,

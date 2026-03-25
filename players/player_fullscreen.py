@@ -2,18 +2,24 @@ from PIL import Image
 
 W, H = 64, 64
 
+# Artwork coordinates in the standard player layout
+ART_X, ART_Y, ART_W, ART_H = 8, 14, 48, 48
+
 class PlayerFullscreen:
     @staticmethod
-    def generate(response, components):
-        img = Image.new("RGB", (W, H), (0, 0, 0))
-        orig_x, orig_y, orig_w, orig_h = components.album_art.x, components.album_art.y, components.album_art.width, components.album_art.height
-        components.album_art.x = 0
-        components.album_art.y = 0
-        components.album_art.width = W
-        components.album_art.height = H
-        
-        components.album_art.draw(img, response.art_url)
-        
-        components.album_art.x, components.album_art.y, components.album_art.width, components.album_art.height = orig_x, orig_y, orig_w, orig_h
-        
+    def generate(response, components, fullscreen_t: float = 1.0, standard_frame: Image.Image = None):
+        t = fullscreen_t * fullscreen_t * (3.0 - 2.0 * fullscreen_t)  # smoothstep
+
+        x = int(ART_X * (1 - t))
+        y = int(ART_Y * (1 - t))
+        w = int(ART_W + (W - ART_W) * t)
+        h = int(ART_H + (H - ART_H) * t)
+
+        img = standard_frame.copy() if standard_frame is not None else Image.new("RGB", (W, H), 0)
+
+        if response.art_url and w > 0 and h > 0:
+            art = components.album_art.cache.get(response.art_url, W)
+            if art:
+                img.paste(art.resize((w, h), Image.LANCZOS), (x, y))
+
         return img
