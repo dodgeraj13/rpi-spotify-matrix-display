@@ -172,9 +172,8 @@ class PlayerLyrics:
                         rem = rem[1:]
         if cur: out.append(cur)
 
-        rain_duration_ms = 450
+        fade_in_duration_ms = 400
         line_stagger_ms = 80
-        drop_distance = 12
         
         fade_out_duration_ms = 200
         fade_out_alpha = 1.0
@@ -188,17 +187,14 @@ class PlayerLyrics:
             time_at_target_ms = progress_ms - current_line_start_ms
             line_elapsed_ms = min(time_at_target_ms, ms_since_appear) - (i * line_stagger_ms)
             
-            line_rain_t = max(0.0, min(1.0, line_elapsed_ms / rain_duration_ms))
+            line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / fade_in_duration_ms))
             
-            eased_t = ease_out_back(line_rain_t)
-            line_y_offset = -drop_distance * (1.0 - eased_t)
-            
-            # Combine rain-in and next-line fade-out
-            line_alpha = line_rain_t * fade_out_alpha
+            # Combine fade-in and next-line fade-out
+            line_alpha = line_fade_in_t * fade_out_alpha
             fill_c = int(255 * line_alpha)
             fill = (fill_c, fill_c, fill_c)
 
-            y = y_offset + i * 6 + line_y_offset
+            y = y_offset + i * 6
             if y + 6 > H: break
             if y > -6:
                 draw.text((2, int(y)), line, fill=fill, font=font)
