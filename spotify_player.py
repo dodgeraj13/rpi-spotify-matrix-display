@@ -113,6 +113,11 @@ class SpotifyPlayer:
                 self.spotify_module.queue.queue.clear()
             
             if new_data:
+                if new_data.track_id is None and self.response is not None and self.response.track_id is not None:
+                    # Device switch or ad; ignore the disrupted state to prevent momentary pausing.
+                    # This allows the player to coast smoothly until the actual track reconnects.
+                    return
+
                 if self.response is None or (self.response.track_id and new_data.track_id != self.response.track_id):
                     self.pending_response = new_data
                     self._request_art(new_data.art_url)
@@ -166,7 +171,7 @@ class SpotifyPlayer:
         if getattr(self, '_last_track_prog', None) == response.track_id:
             diff = self._last_prog_ms - progress_ms
             if 0 < diff < 3000:
-                progress_ms = self._last_prog_ms
+                progress_ms = self._last_prog_ms + int(dt * 1000)
             elif diff >= 3000 and progress_ms < 3000:
                 self.play_show_time = now
                 self._is_skip_back = True
