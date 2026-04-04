@@ -17,12 +17,6 @@ class PlayerLyrics:
         PlayerLyrics._transition_album_art(components, art_t)
         PlayerLyrics._transition_play_indicator(components, t_total)
         
-        if (lyrics_frames > 0) and has_lyrics_now:
-            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
-        
-        # Clear upper UI area to act as an efficient clip mask for the lyrics
-        draw.rectangle((0, 0, W, 17), fill=(0, 0, 0))
-
         components.title_scroll.draw(draw)
         components.artist_scroll.draw(draw)
         
@@ -31,6 +25,9 @@ class PlayerLyrics:
         PlayerLyrics._draw_backgrounds(draw, components, art_t, t_total)
         
         components.album_art.draw(img, response.art_url)
+
+        if (lyrics_frames > 0) and has_lyrics_now:
+            PlayerLyrics._draw_lyrics_text(img, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
 
         if t_total < 0.5:
             state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
@@ -111,7 +108,9 @@ class PlayerLyrics:
             components.progress_bar.draw(draw, progress_ms, duration_ms)
 
     @staticmethod
-    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
+    def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
+        lyrics_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(lyrics_img)
         lyrics_text_start = int(max_lyrics_frames * 23 / 28)
         
         # Determine the initial appearance delay (for rain-in entry).
@@ -221,5 +220,8 @@ class PlayerLyrics:
             if y + 6 > H: break
             if y > -6 and fill_c > 0:
                 draw.text((2, int(y)), line, fill=fill, font=font)
+
+        clip_y = y_offset - 1
+        img.paste(lyrics_img.crop((0, clip_y, W, H)), (0, clip_y), lyrics_img.crop((0, clip_y, W, H)))
 
 
