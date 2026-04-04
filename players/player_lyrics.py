@@ -174,11 +174,7 @@ class PlayerLyrics:
         if cur: out.append(cur)
 
         fade_in_duration_ms = 250
-        line_stagger_in_ms = 0
-        
         fade_out_duration_ms = 250
-        line_stagger_out_ms = 0
-        total_out_duration_ms = fade_out_duration_ms + (len(out) - 1) * line_stagger_out_ms if out else fade_out_duration_ms
 
         exit_fade_duration_ms = 250
         exit_fade_alpha = 1.0
@@ -186,36 +182,35 @@ class PlayerLyrics:
             trans_ms = lyric_transition_time * 1000.0
             exit_fade_alpha = max(0.0, 1.0 - (trans_ms / exit_fade_duration_ms))
 
+        # Anim is relative to min of song timing vs appearance timing
+        time_at_target_ms = progress_ms - current_line_start_ms
+        line_elapsed_ms = min(time_at_target_ms, ms_since_appear)
+        
+        line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / fade_in_duration_ms))
+        
+        line_fade_out_t = 1.0
+        y_offset_anim = 0.0
+        
+        if line_fade_in_t < 1.0:
+            in_progress = line_fade_in_t
+            # Quadratic deceleration (ease out) without overshoot
+            y_offset_anim += ((1.0 - in_progress) ** 2) * 12.0
+
+        if next_line_start_ms:
+            time_until_next = next_line_start_ms - progress_ms
+            out_elapsed = fade_out_duration_ms - time_until_next
+            if out_elapsed > 0:
+                out_progress = min(1.0, out_elapsed / fade_out_duration_ms)
+                line_fade_out_t = 1.0 - out_progress
+                # Linear movement upwards without easing
+                y_offset_anim += -(out_progress * 12.0)
+
+        # Combine fade-in, next-line fade-out, and exit transition fade-out
+        line_alpha = line_fade_in_t * line_fade_out_t * exit_fade_alpha
+        fill_c = int(255 * line_alpha)
+        fill = (fill_c, fill_c, fill_c)
+
         for i, line in enumerate(out):
-            # Anim is relative to min of song timing vs appearance timing
-            time_at_target_ms = progress_ms - current_line_start_ms
-            line_elapsed_ms = min(time_at_target_ms, ms_since_appear) - (i * line_stagger_in_ms)
-            
-            line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / fade_in_duration_ms))
-            
-            line_fade_out_t = 1.0
-            y_offset_anim = 0.0
-            
-            if line_fade_in_t < 1.0:
-                in_progress = line_fade_in_t
-                # Quadratic deceleration (ease out) without overshoot
-                y_offset_anim += ((1.0 - in_progress) ** 2) * 12.0
-
-            if next_line_start_ms:
-                time_until_next = next_line_start_ms - progress_ms
-                out_elapsed = total_out_duration_ms - time_until_next
-                line_out_elapsed = out_elapsed - (i * line_stagger_out_ms)
-                if line_out_elapsed > 0:
-                    out_progress = min(1.0, line_out_elapsed / fade_out_duration_ms)
-                    line_fade_out_t = 1.0 - out_progress
-                    # Quadratic easing (out_progress^2) accelerating upwards
-                    y_offset_anim += -((out_progress ** 2) * 12.0)
-
-            # Combine fade-in, next-line fade-out, and exit transition fade-out
-            line_alpha = line_fade_in_t * line_fade_out_t * exit_fade_alpha
-            fill_c = int(255 * line_alpha)
-            fill = (fill_c, fill_c, fill_c)
-
             y = y_offset + i * 6 + y_offset_anim
             if y + 6 > H: break
             if y > -6 and fill_c > 0:
