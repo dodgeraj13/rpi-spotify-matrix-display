@@ -171,17 +171,14 @@ class PlayerLyrics:
                         rem = rem[1:]
         if cur: out.append(cur)
 
-        fade_in_duration_ms = 200
-        line_stagger_ms = 0
+        fade_in_duration_ms = 300
+        line_stagger_in_ms = 0
         
-        fade_out_duration_ms = 200
-        fade_out_alpha = 1.0
-        if next_line_start_ms:
-            time_until_next = next_line_start_ms - progress_ms
-            if time_until_next < fade_out_duration_ms:
-                fade_out_alpha = max(0.0, time_until_next / fade_out_duration_ms)
+        fade_out_duration_ms = 300
+        line_stagger_out_ms = 0
+        total_out_duration_ms = fade_out_duration_ms + (len(out) - 1) * line_stagger_out_ms if out else fade_out_duration_ms
 
-        exit_fade_duration_ms = 200
+        exit_fade_duration_ms = 300
         exit_fade_alpha = 1.0
         if not can_show_lyrics:
             trans_ms = lyric_transition_time * 1000.0
@@ -190,16 +187,33 @@ class PlayerLyrics:
         for i, line in enumerate(out):
             # Anim is relative to min of song timing vs appearance timing
             time_at_target_ms = progress_ms - current_line_start_ms
-            line_elapsed_ms = min(time_at_target_ms, ms_since_appear) - (i * line_stagger_ms)
+            line_elapsed_ms = min(time_at_target_ms, ms_since_appear) - (i * line_stagger_in_ms)
             
             line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / fade_in_duration_ms))
             
+            line_fade_out_t = 1.0
+            y_offset_anim = 0.0
+            
+            if line_fade_in_t < 1.0:
+                in_progress = line_fade_in_t
+                y_offset_anim += -(1.0 - ease_out_back(in_progress)) * 12.0
+
+            if next_line_start_ms:
+                time_until_next = next_line_start_ms - progress_ms
+                out_elapsed = total_out_duration_ms - time_until_next
+                line_out_elapsed = out_elapsed - (i * line_stagger_out_ms)
+                if line_out_elapsed > 0:
+                    out_progress = min(1.0, line_out_elapsed / fade_out_duration_ms)
+                    line_fade_out_t = 1.0 - out_progress
+                    # Quadratic easing (out_progress^2) simulates gravity acceleration
+                    y_offset_anim += (out_progress ** 2) * 12.0
+
             # Combine fade-in, next-line fade-out, and exit transition fade-out
-            line_alpha = line_fade_in_t * fade_out_alpha * exit_fade_alpha
+            line_alpha = line_fade_in_t * line_fade_out_t * exit_fade_alpha
             fill_c = int(255 * line_alpha)
             fill = (fill_c, fill_c, fill_c)
 
-            y = y_offset + i * 6
+            y = y_offset + i * 6 + y_offset_anim
             if y + 6 > H: break
             if y > -6 and fill_c > 0:
                 draw.text((2, int(y)), line, fill=fill, font=font)
