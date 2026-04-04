@@ -1,18 +1,14 @@
 import time
 from PIL import Image
-from .easing import ease_out_back, ease_linear_back, SLIDE_FRAMES, BOUNCE_FRAMES
-from PIL import ImageDraw
+from .easing import SLIDE_FRAMES
 
 W, H = 64, 64
-
-# Artwork coordinates for the standard player
-ART_X, ART_Y, ART_W, ART_H = 8, 14, 48, 48
 
 class PlayerTransition:
     def __init__(self, target_fps: int):
         self.active = False
         self.frames = 0
-        self.total_frames = SLIDE_FRAMES + BOUNCE_FRAMES
+        self.total_frames = SLIDE_FRAMES
         self.target_fps = target_fps
         self.direction = 1
         self.snapshot = None
@@ -37,11 +33,9 @@ class PlayerTransition:
 
     def generate_frame(self, target_frame, dt: float):
         progress = self.frames / self.total_frames
-        l_end = SLIDE_FRAMES / self.total_frames
         
-        # Calculate linear and eased offsets
-        o_l = int(W * min(1.0, progress / l_end))
-        o_e = int(W * ease_linear_back(progress, l_end))
+        # Calculate linear offset
+        o_l = int(W * progress)
         
         # Directional variables: d is movement sign, t_base is target starting position
         d, t_base = (-1, W) if self.direction == 1 else (1, -W)
@@ -51,14 +45,8 @@ class PlayerTransition:
         # 1. Slide old track away linearly
         comp.paste(self.snapshot, (d * o_l, 0))
         
-        # 2. Slide new track background linearly (black out artwork area to avoid ghosting)
-        bg = target_frame.copy()
-        ImageDraw.Draw(bg).rectangle((ART_X, ART_Y, ART_X + ART_W - 1, ART_Y + ART_H - 1), fill=0)
-        comp.paste(bg, (t_base + d * o_l, 0))
-        
-        # 3. Slide artwork with rubberband effect
-        art = target_frame.crop((ART_X, ART_Y, ART_X + ART_W, ART_Y + ART_H))
-        comp.paste(art, (t_base + d * o_e + ART_X, ART_Y))
+        # 2. Slide new track linearly
+        comp.paste(target_frame, (t_base + d * o_l, 0))
 
         self.frames += dt * self.target_fps
         if self.frames >= self.total_frames:
