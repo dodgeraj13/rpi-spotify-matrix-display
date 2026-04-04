@@ -27,7 +27,7 @@ class PlayerLyrics:
         components.album_art.draw(img, response.art_url)
 
         if (lyrics_frames > 0) and has_lyrics_now:
-            PlayerLyrics._draw_lyrics_text(draw, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
+            PlayerLyrics._draw_lyrics_text(img, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
 
         if t_total < 0.5:
             state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
@@ -108,7 +108,9 @@ class PlayerLyrics:
             components.progress_bar.draw(draw, progress_ms, duration_ms)
 
     @staticmethod
-    def _draw_lyrics_text(draw, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
+    def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
+        lyrics_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(lyrics_img)
         lyrics_text_start = int(max_lyrics_frames * 23 / 28)
         
         # Determine the initial appearance delay (for rain-in entry).
@@ -171,14 +173,14 @@ class PlayerLyrics:
                         rem = rem[1:]
         if cur: out.append(cur)
 
-        fade_in_duration_ms = 300
+        fade_in_duration_ms = 250
         line_stagger_in_ms = 0
         
-        fade_out_duration_ms = 300
+        fade_out_duration_ms = 250
         line_stagger_out_ms = 0
         total_out_duration_ms = fade_out_duration_ms + (len(out) - 1) * line_stagger_out_ms if out else fade_out_duration_ms
 
-        exit_fade_duration_ms = 300
+        exit_fade_duration_ms = 250
         exit_fade_alpha = 1.0
         if not can_show_lyrics:
             trans_ms = lyric_transition_time * 1000.0
@@ -196,7 +198,8 @@ class PlayerLyrics:
             
             if line_fade_in_t < 1.0:
                 in_progress = line_fade_in_t
-                y_offset_anim += -(1.0 - ease_out_back(in_progress)) * 12.0
+                # Quadratic deceleration (ease out) without overshoot
+                y_offset_anim += ((1.0 - in_progress) ** 2) * 12.0
 
             if next_line_start_ms:
                 time_until_next = next_line_start_ms - progress_ms
@@ -205,8 +208,8 @@ class PlayerLyrics:
                 if line_out_elapsed > 0:
                     out_progress = min(1.0, line_out_elapsed / fade_out_duration_ms)
                     line_fade_out_t = 1.0 - out_progress
-                    # Quadratic easing (out_progress^2) simulates gravity acceleration
-                    y_offset_anim += (out_progress ** 2) * 12.0
+                    # Quadratic easing (out_progress^2) accelerating upwards
+                    y_offset_anim += -((out_progress ** 2) * 12.0)
 
             # Combine fade-in, next-line fade-out, and exit transition fade-out
             line_alpha = line_fade_in_t * line_fade_out_t * exit_fade_alpha
@@ -217,5 +220,8 @@ class PlayerLyrics:
             if y + 6 > H: break
             if y > -6 and fill_c > 0:
                 draw.text((2, int(y)), line, fill=fill, font=font)
+
+        clip_y = y_offset - 1
+        img.paste(lyrics_img.crop((0, clip_y, W, H)), (0, clip_y), lyrics_img.crop((0, clip_y, W, H)))
 
 
