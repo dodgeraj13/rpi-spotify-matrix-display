@@ -19,6 +19,8 @@ dependencies = [
     "requests",
     "spotipy",
     "RGBMatrixEmulator",
+    "librelyrics",
+    "librelyrics-spotify",
 ]
 
 [project.urls]
