@@ -25,11 +25,12 @@ class SpotifyPlayer:
         self.spotify_module = spotify_module
         self.always_fullscreen = config.getboolean('Player', 'always_fullscreen', fallback=False)
         self.fullscreen_delay = int(config.get('Player', 'fullscreen_delay', fallback='10'))
-        self.fetch_interval = int(config.get('Matrix', 'fetch_interval', fallback='1'))
         self.shutdown_delay = int(config.get('Player', 'shutdown_delay', fallback='600'))
-        self.scroll_delay = int(config.get('Matrix', 'scroll_delay', fallback='4'))
-        self.scroll_speed = float(config.get('Matrix', 'scroll_speed', fallback='15.0'))
-        self.target_fps = config.getint('Matrix', 'target_fps', fallback=60)
+        self.scroll_delay = 4
+        self.scroll_speed = float(config.get('Player', 'scroll_speed', fallback='15.0'))
+        self.target_fps = config.getint('Player', 'target_fps', fallback=60)
+
+        self.fetch_interval = int(config.get('Spotify', 'fetch_interval', fallback='1'))
 
         for p in [Path("font.otf"), Path(__file__).parent / "font.otf"]:
             if p.exists():

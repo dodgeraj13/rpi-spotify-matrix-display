@@ -43,7 +43,7 @@ class SpotifyModule:
             cfg = self.config['Spotify']
             os.environ["SPOTIPY_CLIENT_ID"] = cfg['client_id']
             os.environ["SPOTIPY_CLIENT_SECRET"] = cfg['client_secret']
-            os.environ["SPOTIPY_REDIRECT_URI"] = cfg['redirect_uri']
+            os.environ["SPOTIPY_REDIRECT_URI"] = "http://127.0.0.1:8080/callback"
             
             self.spotify = spotipy.Spotify(
                 auth_manager=SpotifyOAuth(
