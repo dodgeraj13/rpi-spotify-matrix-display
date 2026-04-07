@@ -23,9 +23,9 @@ class ComponentsBox:
 class SpotifyPlayer:
     def __init__(self, config, spotify_module: SpotifyModule):
         self.spotify_module = spotify_module
-        self.always_fullscreen = config.getboolean('Matrix', 'always_fullscreen', fallback=False)
+        self.always_fullscreen = config.getboolean('Player', 'always_fullscreen', fallback=False)
         self.fetch_interval = int(config.get('Matrix', 'fetch_interval', fallback='1'))
-        self.shutdown_delay = int(config.get('Matrix', 'shutdown_delay', fallback='600'))
+        self.shutdown_delay = int(config.get('Player', 'shutdown_delay', fallback='600'))
         self.scroll_delay = int(config.get('Matrix', 'scroll_delay', fallback='4'))
         self.scroll_speed = float(config.get('Matrix', 'scroll_speed', fallback='15.0'))
         self.target_fps = config.getint('Matrix', 'target_fps', fallback=60)
