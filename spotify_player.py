@@ -141,6 +141,11 @@ class SpotifyPlayer:
     def _generate_frame(self, response: Optional[PlaybackInfo], now: float, dt: float) -> Optional[Image.Image]:
         if not response: return self.black_screen
 
+        if getattr(self, '_is_first_frame', True):
+            self._is_first_frame = False
+            self.last_active_time = now
+            self.last_playing_time = now
+
         if response.is_playing != self.last_is_playing:
             if response.is_playing and (now - self.last_playing_time) < 10.0:
                 self._is_skip_back = True
