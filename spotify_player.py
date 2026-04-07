@@ -24,6 +24,7 @@ class SpotifyPlayer:
     def __init__(self, config, spotify_module: SpotifyModule):
         self.spotify_module = spotify_module
         self.always_fullscreen = config.getboolean('Player', 'always_fullscreen', fallback=False)
+        self.fullscreen_pause_delay = int(config.get('Player', 'fullscreen_pause_delay', fallback='10'))
         self.fetch_interval = int(config.get('Matrix', 'fetch_interval', fallback='1'))
         self.shutdown_delay = int(config.get('Player', 'shutdown_delay', fallback='600'))
         self.scroll_delay = int(config.get('Matrix', 'scroll_delay', fallback='4'))
@@ -253,7 +254,7 @@ class SpotifyPlayer:
         else:
             lyrics_frames = max(0.0, max_lyrics_frames - (lyric_transition_time * fps))
 
-        pause_delay = 10000
+        pause_delay = self.fullscreen_pause_delay * 1000
         lyrics_delay = 2000
 
         if can_show_lyrics and lyrics_frames < max_lyrics_frames * 0.5:
