@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image, ImageFont
+from PIL import Image, ImageFont, ImageDraw
 from spotify_module import SpotifyModule, PlaybackInfo
 
 W, H = 64, 64
@@ -78,6 +78,9 @@ class SpotifyPlayer:
         self._is_skip_back = False
         self.fullscreen_transition_start = 0.0
         self.was_fullscreen = False
+        
+        self.shutdown_transition_start = None
+        self.pre_shutdown_frame = None
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
 
@@ -146,10 +149,19 @@ class SpotifyPlayer:
         self.is_playing = response.is_playing
         
         if response.is_playing:
-            self.last_active_time = math.floor(now)
+            self.last_active_time = now
             self.last_playing_time = now
-        elif math.floor(now) - self.last_active_time > self.shutdown_delay:
-            return self.black_screen
+            self.shutdown_transition_start = None
+            self.pre_shutdown_frame = None
+        elif now - self.last_active_time > self.shutdown_delay:
+            if getattr(self, 'shutdown_transition_start', None) is None:
+                self.shutdown_transition_start = now
+                self.pre_shutdown_frame = self.last_generated_frame or self.black_screen
+            
+            progress = (now - self.shutdown_transition_start) / 0.4
+            if progress >= 1.0:
+                return self.black_screen
+            return self._generate_crt_power_off(self.pre_shutdown_frame, progress)
 
         if response.track_id and response.track_id != self.current_track_id:
             self.player_transition.start(response.track_id, self.current_track_id, self.last_generated_frame, self.black_screen)
@@ -282,4 +294,19 @@ class SpotifyPlayer:
             )
         
         return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components)
+
+    def _generate_crt_power_off(self, frame: Image.Image, progress: float) -> Image.Image:
+        img = Image.new("RGB", (W, H))
+        if progress >= 1.0: return img
+        draw = ImageDraw.Draw(img)
+        
+        if progress < 0.5:
+            t = progress * 2
+            h = max(2, int(H * (1 - t)))
+            img.paste(frame.resize((W, h), getattr(Image, 'Resampling', Image).BILINEAR), (0, (H - h) // 2))
+            draw.line([(0, H // 2), (W, H // 2)], fill=(int(255 * t),) * 3)
+        else:
+            w = max(1, int(W * (1 - (progress - 0.5) * 2)))
+            draw.line([((W - w) // 2, H // 2), ((W + w) // 2, H // 2)], fill=(255, 255, 255))
+        return img
 
