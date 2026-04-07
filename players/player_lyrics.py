@@ -194,7 +194,7 @@ class PlayerLyrics:
         if line_fade_in_t < 1.0:
             in_progress = line_fade_in_t
             # Quadratic deceleration (ease out) without overshoot
-            y_offset_anim += ((1.0 - in_progress) ** 2) * 12.0
+            y_offset_anim += ((1.0 - in_progress) ** 2) * 8.0
 
         if next_line_start_ms:
             time_until_next = next_line_start_ms - progress_ms
@@ -203,7 +203,7 @@ class PlayerLyrics:
                 out_progress = min(1.0, out_elapsed / fade_out_duration_ms)
                 line_fade_out_t = 1.0 - out_progress
                 # Linear movement upwards without easing
-                y_offset_anim += -(out_progress * 12.0)
+                y_offset_anim += -(out_progress * 8.0)
 
         # Combine fade-in, next-line fade-out, and exit transition fade-out
         line_alpha = line_fade_in_t * line_fade_out_t * exit_fade_alpha
