@@ -160,6 +160,7 @@ class SpotifyPlayer:
             
             progress = (now - self.shutdown_transition_start) / 0.4
             if progress >= 1.0:
+                self.current_track_id = None
                 return self.black_screen
             return self._generate_crt_power_off(self.pre_shutdown_frame, progress)
 
@@ -173,6 +174,8 @@ class SpotifyPlayer:
             self.was_fullscreen = False
             self.fullscreen_transition_start = 0.0
             self.play_show_time = now
+            self.components.title_scroll.end_scroll(now)
+            self.components.artist_scroll.end_scroll(now)
 
         progress_ms = response.progress_ms
         if self.response_timestamp > 0 and response.is_playing:
