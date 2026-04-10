@@ -66,7 +66,7 @@ rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
 	      [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
 	    echo "🔨 Building rpi-rgb-led-matrix..."; \
 		cd deps/rpi-rgb-led-matrix && \
-			make -C bindings/python/rgbmatrix -B CYTHON=cython3 && \
+			make build-python CYTHON=cython3 && \
 			make; \
 	fi
 	@if ! .venv/bin/python -c "import rgbmatrix" >/dev/null 2>&1; then \
