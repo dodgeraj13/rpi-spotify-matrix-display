@@ -58,20 +58,14 @@ rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
 		echo "📦 Installing python3-dev..."; \
 		sudo apt-get update && sudo apt-get install -y python3-dev; \
 	fi
-	@if ! dpkg -s cython3 >/dev/null 2>&1; then \
-		echo "📦 Installing cython3..."; \
-		sudo apt-get update && sudo apt-get install -y cython3; \
-	fi
-	@if [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
-	      [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
-	    echo "🔨 Building rpi-rgb-led-matrix..."; \
-		cd deps/rpi-rgb-led-matrix && \
-			make build-python CYTHON=cython3 && \
-			make; \
+	@if ! dpkg -s cmake >/dev/null 2>&1; then \
+		echo "📦 Installing cmake..."; \
+		sudo apt-get update && sudo apt-get install -y cmake; \
 	fi
 	@if ! .venv/bin/python -c "import rgbmatrix" >/dev/null 2>&1; then \
-		echo "📦 Installing Python bindings..."; \
-		.venv/bin/pip install deps/rpi-rgb-led-matrix/bindings/python --use-pep517; \
+		echo "🔨 Building and installing rpi-rgb-led-matrix..."; \
+		cd deps/rpi-rgb-led-matrix && make; \
+		.venv/bin/pip install ./deps/rpi-rgb-led-matrix; \
 	fi
 
 rpi-service: ## Raspberry Pi ONLY - Set up systemd service and alias
