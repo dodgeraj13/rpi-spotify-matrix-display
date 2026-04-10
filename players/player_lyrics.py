@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw
-from transitions import SlideTransition, ScaleTransition, ease_out_back
+from transitions import SlideTransition, ScaleTransition
 
 W, H = 64, 64
 

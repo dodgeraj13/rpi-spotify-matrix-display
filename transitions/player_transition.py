@@ -1,6 +1,6 @@
 import time
 from PIL import Image
-from .easing import SLIDE_FRAMES
+SLIDE_FRAMES = 50
 
 W, H = 64, 64
 
