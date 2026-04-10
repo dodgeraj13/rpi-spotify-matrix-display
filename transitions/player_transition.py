@@ -1,6 +1,6 @@
 import time
 from PIL import Image
-SLIDE_FRAMES = 50
+SLIDE_FRAMES = 64
 
 W, H = 64, 64
 
@@ -34,8 +34,11 @@ class PlayerTransition:
     def generate_frame(self, target_frame, dt: float):
         progress = self.frames / self.total_frames
         
-        # Calculate linear offset
-        o_l = int(W * progress)
+        # Apply an ease-out cubic curve so to slow down at the end
+        eased_progress = 1 - (1 - progress) ** 3
+        
+        # Calculate offset using round instead of int to avoid 1px truncation errors near 1.0
+        o_l = round(W * eased_progress)
         
         # Directional variables: d is movement sign, t_base is target starting position
         d, t_base = (-1, W) if self.direction == 1 else (1, -W)
