@@ -1,6 +1,6 @@
 import time
 from PIL import Image
-SLIDE_FRAMES = 64
+SLIDE_FRAMES = 100
 
 W, H = 64, 64
 
