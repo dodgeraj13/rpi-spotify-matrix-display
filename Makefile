@@ -54,20 +54,24 @@ run: rpi-bindings rpi-service ## Run the display on a raspberry pi connected mat
 	sudo .venv/bin/python main.py
 
 rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
-	@if ! dpkg -s python3-dev >/dev/null 2>&1 || ! dpkg -s cython3 >/dev/null 2>&1; then \
-		echo "📦 Installing python3-dev and cython3..."; \
-		sudo apt-get update && sudo apt-get install -y python3-dev cython3; \
+	@if ! dpkg -s python3-dev >/dev/null 2>&1; then \
+		echo "📦 Installing python3-dev..."; \
+		sudo apt-get update && sudo apt-get install -y python3-dev; \
+	fi
+	@if ! dpkg -s cython3 >/dev/null 2>&1; then \
+		echo "📦 Installing cython3..."; \
+		sudo apt-get update && sudo apt-get install -y cython3; \
 	fi
 	@if [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/core.cpp ] || \
 	      [ ! -f deps/rpi-rgb-led-matrix/bindings/python/rgbmatrix/graphics.cpp ]; then \
 	    echo "🔨 Building rpi-rgb-led-matrix..."; \
 		cd deps/rpi-rgb-led-matrix && \
-			make -C bindings/python build-python CYTHON=cython3 && \
+			make -C bindings/python/rgbmatrix -B CYTHON=cython3 && \
 			make; \
 	fi
 	@if ! .venv/bin/python -c "import rgbmatrix" >/dev/null 2>&1; then \
 		echo "📦 Installing Python bindings..."; \
-		.venv/bin/pip install deps/rpi-rgb-led-matrix/bindings/python; \
+		.venv/bin/pip install deps/rpi-rgb-led-matrix/bindings/python --use-pep517; \
 	fi
 
 rpi-service: ## Raspberry Pi ONLY - Set up systemd service and alias
