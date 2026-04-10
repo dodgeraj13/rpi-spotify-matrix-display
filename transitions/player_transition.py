@@ -1,6 +1,6 @@
 import time
 from PIL import Image
-SLIDE_FRAMES = 100
+SLIDE_FRAMES = 80
 
 W, H = 64, 64
 
@@ -32,10 +32,10 @@ class PlayerTransition:
                 self.history.pop(0)
 
     def generate_frame(self, target_frame, dt: float):
-        progress = self.frames / self.total_frames
+        progress = min(1.0, self.frames / self.total_frames)
         
-        # Apply an ease-out cubic curve so to slow down at the end
-        eased_progress = 1 - (1 - progress) ** 3
+        # Apply an ease-out quad curve
+        eased_progress = 1 - (1 - progress) ** 2
         
         # Calculate offset using round instead of int to avoid 1px truncation errors near 1.0
         o_l = round(W * eased_progress)
