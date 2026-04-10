@@ -91,7 +91,7 @@ rpi-service: ## Raspberry Pi ONLY - Set up systemd service and alias
 	@if ! grep -q "alias matrix=" ~/.bash_aliases 2>/dev/null; then \
 		echo "⚡ Adding alias 'matrix' to ~/.bash_aliases..."; \
 		echo "alias matrix='sudo service matrix'" >> ~/.bash_aliases; \
-		source ~/.bash_aliases; \
+		. ~/.bash_aliases; \
 		echo "Use matrix start|stop|restart to control it."; \
 		echo ""; \
 	fi
