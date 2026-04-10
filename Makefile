@@ -60,7 +60,7 @@ rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
 	fi
 	@if ! .venv/bin/python -c "import rgbmatrix" >/dev/null 2>&1; then \
 		echo "🔨 Building and installing rpi-rgb-led-matrix..."; \
-		cd deps/rpi-rgb-led-matrix && sudo pip install .; \
+		cd deps/rpi-rgb-led-matrix && sudo $(CURDIR)/.venv/bin/pip install .; \
 	fi
 
 rpi-service: ## Raspberry Pi ONLY - Set up systemd service and alias
