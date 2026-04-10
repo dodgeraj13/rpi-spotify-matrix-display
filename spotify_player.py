@@ -43,19 +43,7 @@ class SpotifyPlayer:
         self.art_cache = ArtCache()
         self.player_transition = PlayerTransition(self.target_fps)
 
-        self.progress_bar = ProgressBar(0, 62, 64, 2)
-        self.title_scroll = ScrollingText(1, 1, 52, 6, self.scroll_speed, self.scroll_delay, self.font)
-        self.artist_scroll = ScrollingText(1, 7, 52, 6, self.scroll_speed, self.scroll_delay, self.font)
-        self.title_scroll.add_sync(self.artist_scroll)
-        self.album_art = AlbumArt(8, 14, 48, 48, self.art_cache)
-        self.play_indicator = PlayIndicator(56, 3, 5, 7)
-
-        self.components = ComponentsBox()
-        self.components.progress_bar = self.progress_bar
-        self.components.title_scroll = self.title_scroll
-        self.components.artist_scroll = self.artist_scroll
-        self.components.album_art = self.album_art
-        self.components.play_indicator = self.play_indicator
+        self.components = self._create_components()
 
         self.current_track_id = None
         self.is_playing = None
@@ -84,6 +72,16 @@ class SpotifyPlayer:
         self.pre_shutdown_frame = None
 
         threading.Thread(target=self._fetch_loop, daemon=True).start()
+
+    def _create_components(self):
+        components = ComponentsBox()
+        components.progress_bar = ProgressBar(0, 62, 64, 2)
+        components.title_scroll = ScrollingText(1, 1, 52, 6, self.scroll_speed, self.scroll_delay, self.font)
+        components.artist_scroll = ScrollingText(1, 7, 52, 6, self.scroll_speed, self.scroll_delay, self.font)
+        components.title_scroll.add_sync(components.artist_scroll)
+        components.album_art = AlbumArt(8, 14, 48, 48, self.art_cache)
+        components.play_indicator = PlayIndicator(56, 3, 5, 7)
+        return components
 
     def _fetch_loop(self):
         time.sleep(3)
@@ -171,7 +169,23 @@ class SpotifyPlayer:
             return self._generate_crt_power_off(self.pre_shutdown_frame, progress)
 
         if response.track_id and response.track_id != self.current_track_id:
-            self.player_transition.start(response.track_id, self.current_track_id, self.last_generated_frame, self.black_screen)
+            self.old_components = self.components
+            self.components = self._create_components()
+            self.old_response = self.response if self.response and self.response.track_id == self.current_track_id else getattr(self, 'last_response', None)
+            if not self.old_response and hasattr(self, '_last_response_obj'):
+                self.old_response = self._last_response_obj
+            self.old_progress_ms = self._last_prog_ms
+            self.old_duration_ms = self.old_response.duration_ms if self.old_response else 0
+            self.old_render_state = {
+                'was_fullscreen': getattr(self, 'was_fullscreen', False),
+                'fullscreen_transition_start': getattr(self, 'fullscreen_transition_start', 0.0),
+                'was_showing_lyrics': getattr(self, 'was_showing_lyrics', False),
+                'lyrics_transition_start': getattr(self, 'lyrics_transition_start', 0.0),
+                'play_show_time': getattr(self, 'play_show_time', 0.0),
+                'player_transition_finish_time': getattr(self.player_transition, 'finish_time', 0.0)
+            }
+            
+            self.player_transition.start(response.track_id, self.current_track_id)
             self.current_track_id = response.track_id
             self.player_transition.update_history(response.track_id)
             self.was_showing_lyrics = False
@@ -199,6 +213,7 @@ class SpotifyPlayer:
                 self._is_skip_back = True
         self._last_prog_ms = progress_ms
         self._last_track_prog = response.track_id
+        self._last_response_obj = response
         
         self.components.title_scroll.update_text(response.title)
         self.components.artist_scroll.update_text(response.artist)
@@ -207,7 +222,18 @@ class SpotifyPlayer:
         target_frame = self._generate_appearance(response, progress_ms, duration_ms, now)
 
         if self.player_transition.active:
-            return self.player_transition.generate_frame(target_frame, dt)
+            if hasattr(self, 'old_components') and self.old_components and getattr(self, 'old_response', None):
+                self.old_components.title_scroll.update(now)
+                self.old_components.artist_scroll.update(now)
+                self.old_progress_ms = min(getattr(self, 'old_duration_ms', 0), self.old_progress_ms + int(dt * 1000))
+                
+                old_frame = self._render_appearance_from_state(
+                    self.old_response, self.old_progress_ms, getattr(self, 'old_duration_ms', 0), 
+                    now, self.old_components, getattr(self, 'old_render_state', {})
+                )
+            else:
+                old_frame = self.black_screen
+            return self.player_transition.generate_frame(target_frame, old_frame, dt)
         return target_frame
 
     def _has_current_lyrics(self, response, progress_ms):
@@ -240,6 +266,42 @@ class SpotifyPlayer:
             if next_lyric_ms - progress_ms <= anim_time_ms: return True
                 
         return False
+
+    def _render_appearance_from_state(self, response, progress_ms, duration_ms, now, components, state):
+        components.title_scroll.update(now)
+        components.artist_scroll.update(now)
+
+        show_play = False
+        if response.is_playing and (now - state.get('play_show_time', 0) < 2.0): show_play = True
+        # Don't show play icon based on new slide's transition activity
+
+        showing_lyric = self._has_current_lyrics(response, progress_ms)
+        can_show_lyrics = state.get('was_showing_lyrics', False)
+        
+        lyric_transition_time = now - state.get('lyrics_transition_start', 0)
+        max_lyrics_frames = 42
+        fps = float(self.target_fps)
+
+        if can_show_lyrics:
+            lyrics_frames = min(max_lyrics_frames, lyric_transition_time * fps)
+        else:
+            lyrics_frames = max(0.0, max_lyrics_frames - (lyric_transition_time * fps))
+
+        wants_fullscreen = state.get('was_fullscreen', False)
+        raw_t = min(1.0, (now - state.get('fullscreen_transition_start', 0)) / 0.5)
+        fullscreen_t = raw_t if wants_fullscreen else (1.0 - raw_t)
+
+        if wants_fullscreen or fullscreen_t > 0.0:
+            standard_frame = PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components)
+            return PlayerFullscreen.generate(response, components, fullscreen_t, standard_frame)
+        elif lyrics_frames > 0:
+            return PlayerLyrics.generate(
+                response, progress_ms, duration_ms, show_play, components,
+                lyrics_frames, max_lyrics_frames, showing_lyric, 
+                lyric_transition_time, can_show_lyrics
+            )
+        
+        return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components)
 
     def _generate_appearance(self, response, progress_ms, duration_ms, now):
         self.components.title_scroll.update(now)

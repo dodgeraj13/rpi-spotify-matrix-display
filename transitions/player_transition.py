@@ -15,10 +15,9 @@ class PlayerTransition:
         self.finish_time = 0.0
         self.history = []
 
-    def start(self, new_track_id, current_track_id, current_frame, black_screen):
+    def start(self, new_track_id, current_track_id):
         self.active = True
         self.frames = 0
-        self.snapshot = current_frame or black_screen
         self.direction = 1
         
         if new_track_id in self.history and current_track_id in self.history:
@@ -31,7 +30,7 @@ class PlayerTransition:
             if len(self.history) > 20:
                 self.history.pop(0)
 
-    def generate_frame(self, target_frame, dt: float):
+    def generate_frame(self, target_frame, old_frame, dt: float):
         progress = min(1.0, self.frames / self.total_frames)
         
         # Apply an ease-out quad curve
@@ -46,7 +45,7 @@ class PlayerTransition:
         comp = Image.new("RGB", (W, H), 0)
         
         # 1. Slide old track away linearly
-        comp.paste(self.snapshot, (d * o_l, 0))
+        comp.paste(old_frame, (d * o_l, 0))
         
         # 2. Slide new track linearly
         comp.paste(target_frame, (t_base + d * o_l, 0))
