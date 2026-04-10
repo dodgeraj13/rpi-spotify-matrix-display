@@ -13,6 +13,7 @@ W, H = 64, 64
 
 from components import ArtCache, ProgressBar, ScrollingText, AlbumArt, PlayIndicator
 from transitions import PlayerTransition
+from transitions.player_transition import SLIDE_FRAMES
 from players.player_fullscreen import PlayerFullscreen
 from players.player_standard import PlayerStandard
 from players.player_lyrics import PlayerLyrics
@@ -279,13 +280,12 @@ class SpotifyPlayer:
         can_show_lyrics = state.get('was_showing_lyrics', False)
         
         lyric_transition_time = now - state.get('lyrics_transition_start', 0)
-        max_lyrics_frames = 42
         fps = float(self.target_fps)
 
         if can_show_lyrics:
-            lyrics_frames = min(max_lyrics_frames, lyric_transition_time * fps)
+            lyrics_frames = min(SLIDE_FRAMES, lyric_transition_time * fps)
         else:
-            lyrics_frames = max(0.0, max_lyrics_frames - (lyric_transition_time * fps))
+            lyrics_frames = max(0.0, SLIDE_FRAMES - (lyric_transition_time * fps))
 
         wants_fullscreen = state.get('was_fullscreen', False)
         raw_t = min(1.0, (now - state.get('fullscreen_transition_start', 0)) / 0.5)
@@ -297,7 +297,7 @@ class SpotifyPlayer:
         elif lyrics_frames > 0:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, components,
-                lyrics_frames, max_lyrics_frames, showing_lyric, 
+                lyrics_frames, SLIDE_FRAMES, showing_lyric, 
                 lyric_transition_time, can_show_lyrics
             )
         
@@ -329,18 +329,17 @@ class SpotifyPlayer:
         self.was_showing_lyrics = can_show_lyrics
             
         lyric_transition_time = now - self.lyrics_transition_start
-        max_lyrics_frames = 42
         fps = float(self.target_fps)
 
         if can_show_lyrics:
-            lyrics_frames = min(max_lyrics_frames, lyric_transition_time * fps)
+            lyrics_frames = min(SLIDE_FRAMES, lyric_transition_time * fps)
         else:
-            lyrics_frames = max(0.0, max_lyrics_frames - (lyric_transition_time * fps))
+            lyrics_frames = max(0.0, SLIDE_FRAMES - (lyric_transition_time * fps))
 
         pause_delay = self.fullscreen_delay * 1000
         lyrics_delay = 2000
 
-        if can_show_lyrics and lyrics_frames < max_lyrics_frames * 0.5:
+        if can_show_lyrics and lyrics_frames < SLIDE_FRAMES * 0.5:
             t = self.lyrics_transition_start
             show_play = response.is_playing and ((t - self.play_show_time < 2.1) or \
                         (not self.player_transition.active and t - self.player_transition.finish_time < 2.1))
@@ -360,7 +359,7 @@ class SpotifyPlayer:
         elif lyrics_frames > 0:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, self.components,
-                lyrics_frames, max_lyrics_frames, showing_lyric, 
+                lyrics_frames, SLIDE_FRAMES, showing_lyric, 
                 lyric_transition_time, can_show_lyrics
             )
         
