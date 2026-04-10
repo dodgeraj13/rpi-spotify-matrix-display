@@ -1,5 +1,5 @@
 install: ## Install dependencies and request Spotify credentials
-	git submodule update --init --recursive
+	git submodule update --init --recursive --depth 1
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e . -e ./deps/librelyrics -e ./deps/librelyrics-spotify
