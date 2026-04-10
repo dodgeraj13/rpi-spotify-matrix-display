@@ -58,6 +58,10 @@ rpi-bindings: ## Raspberry Pi ONLY - Install required python bindings
 		echo "📦 Installing python3-dev..."; \
 		sudo apt-get update && sudo apt-get install -y python3-dev; \
 	fi
+	@if ! dpkg -s python3-pil >/dev/null 2>&1; then \
+		echo "📦 Installing python3-pil..."; \
+		sudo apt-get update && sudo apt-get install -y python3-pil; \
+	fi
 	@if ! dpkg -s cython3 >/dev/null 2>&1; then \
 		echo "📦 Installing cython3..."; \
 		sudo apt-get update && sudo apt-get install -y cython3; \
