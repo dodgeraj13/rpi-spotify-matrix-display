@@ -1,8 +1,7 @@
 install: ## Install dependencies and request Spotify credentials
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install -e ./deps/librelyrics -e ./deps/librelyrics-spotify
-	.venv/bin/pip install -e .
+	.venv/bin/pip install -e . -e ./deps/librelyrics -e ./deps/librelyrics-spotify
 	@rm -rf *.egg-info/
 	@if grep -q "client_id = <YOUR_CLIENT_ID_HERE>" config.ini; then \
 		echo ""; \

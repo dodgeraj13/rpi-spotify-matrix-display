@@ -1,3 +1,9 @@
-[submodule "rpi-rgb-led-matrix"]
-	path = rpi-rgb-led-matrix
-	url = https://github.com/hzeller/rpi-rgb-led-matrix
+[submodule "deps/rpi-rgb-led-matrix"]
+	path = deps/rpi-rgb-led-matrix
+	url = https://github.com/hzeller/rpi-rgb-led-matrix.git
+[submodule "deps/librelyrics"]
+	path = deps/librelyrics
+	url = https://github.com/kylejohnsonkj/librelyrics.git
+[submodule "deps/librelyrics-spotify"]
+	path = deps/librelyrics-spotify
+	url = https://github.com/kylejohnsonkj/librelyrics-spotify.git
