@@ -241,7 +241,7 @@ class SpotifyPlayer:
         if not response.lyrics or response.lyrics.get('lyrics', {}).get('syncType') != 'LINE_SYNCED':
             return False
             
-        anim_time_ms = 466
+        anim_time_ms = int(LYRICS_FRAMES / self.target_fps * 1000)
         lines = response.lyrics['lyrics']['lines']
         current_line = None
         current_idx = -1
@@ -298,7 +298,7 @@ class SpotifyPlayer:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, components,
                 lyrics_frames, LYRICS_FRAMES, showing_lyric, 
-                lyric_transition_time, can_show_lyrics
+                lyric_transition_time, can_show_lyrics, self.target_fps
             )
         
         return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components)
@@ -318,8 +318,7 @@ class SpotifyPlayer:
 
         showing_lyric = self._has_current_lyrics(response, progress_ms)
         is_skip_back = getattr(self, '_is_skip_back', False)
-        can_show_lyrics = (self.was_showing_lyrics or is_skip_back or True) and \
-                          response.is_playing and showing_lyric and not self.player_transition.active
+        can_show_lyrics = (showing_lyric or is_skip_back) and response.is_playing
         
         if can_show_lyrics and not self.was_showing_lyrics:
             self.lyrics_transition_start = now
@@ -360,7 +359,7 @@ class SpotifyPlayer:
             return PlayerLyrics.generate(
                 response, progress_ms, duration_ms, show_play, self.components,
                 lyrics_frames, LYRICS_FRAMES, showing_lyric, 
-                lyric_transition_time, can_show_lyrics
+                lyric_transition_time, can_show_lyrics, self.target_fps
             )
         
         return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components)
