@@ -318,7 +318,7 @@ class SpotifyPlayer:
 
         showing_lyric = self._has_current_lyrics(response, progress_ms)
         is_skip_back = getattr(self, '_is_skip_back', False)
-        can_show_lyrics = (time_playing_ms > 2000 or self.was_showing_lyrics or is_skip_back) and \
+        can_show_lyrics = (self.was_showing_lyrics or is_skip_back or True) and \
                           response.is_playing and showing_lyric and not self.player_transition.active
         
         if can_show_lyrics and not self.was_showing_lyrics:
