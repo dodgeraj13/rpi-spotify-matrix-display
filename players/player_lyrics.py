@@ -2,6 +2,7 @@ from PIL import Image, ImageDraw
 from transitions import SlideTransition, ScaleTransition
 
 W, H = 64, 64
+LYRIC_FADE_MS = 300
 
 class PlayerLyrics:
     @staticmethod
@@ -111,7 +112,7 @@ class PlayerLyrics:
     def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
         lyrics_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         draw = ImageDraw.Draw(lyrics_img)
-        lyrics_text_start = int(max_lyrics_frames * 26 / 28)
+        lyrics_text_start = int(max_lyrics_frames * 16 / 28)
         
         # Determine the initial appearance delay (for rain-in entry).
         if can_show_lyrics:
@@ -170,20 +171,11 @@ class PlayerLyrics:
                         rem = rem[1:]
         if cur: out.append(cur)
 
-        fade_in_duration_ms = 250
-        fade_out_duration_ms = 250
-
-        exit_fade_duration_ms = 250
-        exit_fade_alpha = 1.0
-        if not can_show_lyrics:
-            trans_ms = lyric_transition_time * 1000.0
-            exit_fade_alpha = max(0.0, 1.0 - (trans_ms / exit_fade_duration_ms))
-
         # Anim is relative to min of song timing vs appearance timing
         time_at_target_ms = progress_ms - current_line_start_ms
         line_elapsed_ms = min(time_at_target_ms, ms_since_appear)
         
-        line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / fade_in_duration_ms))
+        line_fade_in_t = max(0.0, min(1.0, line_elapsed_ms / LYRIC_FADE_MS))
         
         line_fade_out_t = 1.0
         y_offset_anim = 0.0
@@ -192,12 +184,17 @@ class PlayerLyrics:
             in_progress = line_fade_in_t
             # Quadratic deceleration (ease out) without overshoot
             y_offset_anim += ((1.0 - in_progress) ** 2) * 8.0
+            
+        exit_fade_alpha = 1.0
+        if not can_show_lyrics:
+            trans_ms = lyric_transition_time * 1000.0
+            exit_fade_alpha = max(0.0, 1.0 - (trans_ms / LYRIC_FADE_MS))
 
         if next_line_start_ms:
             time_until_next = next_line_start_ms - progress_ms
-            out_elapsed = fade_out_duration_ms - time_until_next
+            out_elapsed = LYRIC_FADE_MS - time_until_next
             if out_elapsed > 0:
-                out_progress = min(1.0, out_elapsed / fade_out_duration_ms)
+                out_progress = min(1.0, out_elapsed / LYRIC_FADE_MS)
                 line_fade_out_t = 1.0 - out_progress
                 # Linear movement upwards without easing
                 y_offset_anim += -(out_progress * 8.0)
