@@ -111,7 +111,7 @@ class PlayerLyrics:
     def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
         lyrics_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         draw = ImageDraw.Draw(lyrics_img)
-        lyrics_text_start = int(max_lyrics_frames * 16 / 28)
+        lyrics_text_start = int(max_lyrics_frames * 23 / 28)
         
         # Determine the initial appearance delay (for rain-in entry).
         if can_show_lyrics:
