@@ -6,7 +6,7 @@ LYRIC_FADE_MS = 300
 
 class PlayerLyrics:
     @staticmethod
-    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_frames, max_lyrics_frames, has_lyrics_now, lyric_transition_time, can_show_lyrics, target_fps):
+    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_frames, max_lyrics_frames, has_lyrics_now, lyric_transition_time, can_show_lyrics):
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
@@ -28,7 +28,7 @@ class PlayerLyrics:
         components.album_art.draw(img, response.art_url)
 
         if (lyrics_frames > 0) and has_lyrics_now:
-            PlayerLyrics._draw_lyrics_text(img, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics, target_fps)
+            PlayerLyrics._draw_lyrics_text(img, response.lyrics, progress_ms, 18, lyrics_frames, components.title_scroll.font, max_lyrics_frames, lyric_transition_time, can_show_lyrics)
 
         if t_total < 0.5:
             state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
@@ -109,14 +109,14 @@ class PlayerLyrics:
             components.progress_bar.draw(draw, progress_ms, duration_ms)
 
     @staticmethod
-    def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics, target_fps):
+    def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
         lyrics_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         draw = ImageDraw.Draw(lyrics_img)
         lyrics_text_start = int(max_lyrics_frames * 16 / 28)
         
         # Determine the initial appearance delay (for rain-in entry).
         if can_show_lyrics:
-            ms_since_appear = max(0.0, (lyrics_frames - lyrics_text_start) / target_fps * 1000.0)
+            ms_since_appear = max(0.0, (lyric_transition_time * 1000.0) - (lyrics_text_start * (1000.0 / 60.0)))
         else:
             ms_since_appear = 10000.0
         
