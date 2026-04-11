@@ -1,6 +1,7 @@
 import time
 from PIL import Image
 SLIDE_FRAMES = 80
+LYRICS_FRAMES = 60
 
 W, H = 64, 64
 
