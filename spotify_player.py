@@ -184,7 +184,8 @@ class SpotifyPlayer:
                 'was_showing_lyrics': getattr(self, 'was_showing_lyrics', False),
                 'lyrics_transition_start': getattr(self, 'lyrics_transition_start', 0.0),
                 'play_show_time': getattr(self, 'play_show_time', 0.0),
-                'player_transition_finish_time': getattr(self.player_transition, 'finish_time', 0.0)
+                'player_transition_finish_time': getattr(self.player_transition, 'finish_time', 0.0),
+                'last_playing_time': getattr(self, 'last_playing_time', 0.0)
             }
             
             self.player_transition.start(response.track_id, self.current_track_id)
@@ -278,7 +279,8 @@ class SpotifyPlayer:
         # Don't show play icon based on new slide's transition activity
 
         showing_lyric = self._has_current_lyrics(response, progress_ms)
-        can_show_lyrics = self.lyrics_mode == 'dedicated' and state.get('was_showing_lyrics', False)
+        can_show_lyrics_internal = state.get('was_showing_lyrics', False)
+        can_show_lyrics = self.lyrics_mode == 'dedicated' and can_show_lyrics_internal
         
         lyric_transition_time = now - state.get('lyrics_transition_start', 0)
         fps = float(self.target_fps)
@@ -295,7 +297,7 @@ class SpotifyPlayer:
         fullscreen_t = raw_t if wants_fullscreen else (1.0 - raw_t)
 
         if wants_fullscreen or fullscreen_t > 0.0:
-            standard_frame = PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time)
+            standard_frame = PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time, can_show_lyrics_internal)
             return PlayerFullscreen.generate(response, components, fullscreen_t, standard_frame)
         elif lyrics_frames > 0:
             return PlayerLyrics.generate(
@@ -304,7 +306,7 @@ class SpotifyPlayer:
                 lyric_transition_time, can_show_lyrics
             )
         
-        return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time)
+        return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time, can_show_lyrics_internal)
 
     def _generate_appearance(self, response, progress_ms, duration_ms, now):
         self.components.title_scroll.update(now)
@@ -322,8 +324,20 @@ class SpotifyPlayer:
         showing_lyric = self._has_current_lyrics(response, progress_ms)
         is_skip_back = getattr(self, '_is_skip_back', False)
         
+        pause_delay = self.fullscreen_delay * 1000
+        wants_fullscreen = self.always_fullscreen or time_paused_ms > pause_delay
+
+        if wants_fullscreen != self.was_fullscreen:
+            self.fullscreen_transition_start = now
+        self.was_fullscreen = wants_fullscreen
+
+        raw_t = min(1.0, (now - self.fullscreen_transition_start) / 0.5)
+        fullscreen_t = raw_t if wants_fullscreen else (1.0 - raw_t)
+        is_fullscreen_active = fullscreen_t > 0.0
+        
         can_show_lyrics_internal = (self.was_showing_lyrics or is_skip_back or True) and \
-                                   response.is_playing and showing_lyric and not self.player_transition.active
+                                   response.is_playing and showing_lyric and not self.player_transition.active and \
+                                   not is_fullscreen_active
         
         if can_show_lyrics_internal and not self.was_showing_lyrics:
             self.lyrics_transition_start = now
@@ -343,7 +357,6 @@ class SpotifyPlayer:
         else:
             lyrics_frames = 0.0
 
-        pause_delay = self.fullscreen_delay * 1000
         lyrics_delay = 2000
 
         if can_show_lyrics and lyrics_frames < LYRICS_FRAMES * 0.5:
@@ -351,17 +364,8 @@ class SpotifyPlayer:
             show_play = response.is_playing and ((t - self.play_show_time < 2.1) or \
                         (not self.player_transition.active and t - self.player_transition.finish_time < 2.1))
 
-        wants_fullscreen = self.always_fullscreen or time_paused_ms > pause_delay
-
-        if wants_fullscreen != self.was_fullscreen:
-            self.fullscreen_transition_start = now
-        self.was_fullscreen = wants_fullscreen
-
-        raw_t = min(1.0, (now - self.fullscreen_transition_start) / 0.5)
-        fullscreen_t = raw_t if wants_fullscreen else (1.0 - raw_t)
-
         if wants_fullscreen or fullscreen_t > 0.0:
-            standard_frame = PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time)
+            standard_frame = PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time, can_show_lyrics_internal)
             return PlayerFullscreen.generate(response, self.components, fullscreen_t, standard_frame)
         elif lyrics_frames > 0:
             return PlayerLyrics.generate(
@@ -370,7 +374,7 @@ class SpotifyPlayer:
                 lyric_transition_time, can_show_lyrics
             )
         
-        return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time)
+        return PlayerStandard.generate(response, progress_ms, duration_ms, show_play, self.components, getattr(self, 'lyrics_mode', 'off'), lyric_transition_time, can_show_lyrics_internal)
 
     def _generate_crt_power_off(self, frame: Image.Image, progress: float) -> Image.Image:
         img = Image.new("RGB", (W, H))

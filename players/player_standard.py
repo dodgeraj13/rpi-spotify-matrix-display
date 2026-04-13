@@ -6,7 +6,7 @@ FADE_MS = 300
 
 class PlayerStandard:
     @staticmethod
-    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_mode="off", lyric_transition_time=10.0):
+    def generate(response, progress_ms, duration_ms, show_play, components, lyrics_mode="off", lyric_transition_time=10.0, lyrics_active=True):
         img = Image.new("RGB", (W, H), (0, 0, 0))
         draw = ImageDraw.Draw(img)
 
@@ -37,14 +37,25 @@ class PlayerStandard:
 
         components.album_art.draw(img, response.art_url)
 
-        if lyrics_mode == 'standard' and response.is_playing and response.lyrics and response.lyrics.get('lyrics', {}).get('syncType') == 'LINE_SYNCED':
+        if lyrics_mode == 'standard' and response.lyrics and response.lyrics.get('lyrics', {}).get('syncType') == 'LINE_SYNCED':
+            all_lines = response.lyrics['lyrics'].get('lines', [])
             valid_lines = []
-            for l in response.lyrics['lyrics'].get('lines', []):
+            
+            for i, l in enumerate(all_lines):
                 w = l.get('words', '').strip()
                 if w and w != "♪":
+                    start_ms = int(l.get('startTimeMs', 0))
+                    end_ms = int(l.get('endTimeMs', 0))
+                    
+                    if end_ms == 0:
+                        if i + 1 < len(all_lines):
+                            end_ms = int(all_lines[i+1].get('startTimeMs', 0))
+                        else:
+                            end_ms = start_ms + 5000
+                            
                     valid_lines.append({
-                        'start_ms': int(l.get('startTimeMs', 0)),
-                        'end_ms': int(l.get('endTimeMs', 0)),
+                        'start_ms': start_ms,
+                        'end_ms': end_ms,
                         'text': w
                     })
 
@@ -52,8 +63,11 @@ class PlayerStandard:
             text_alpha = 0.0
             text_to_draw = None
 
-            ms_since_appear = lyric_transition_time * 1000.0
-            global_fade_in = max(0.0, min(1.0, ms_since_appear / float(FADE_MS)))
+            ms_since_event = lyric_transition_time * 1000.0
+            if lyrics_active:
+                global_fade_in = max(0.0, min(1.0, ms_since_event / float(FADE_MS)))
+            else:
+                global_fade_in = max(0.0, min(1.0, 1.0 - (ms_since_event / float(FADE_MS))))
 
             for i, line in enumerate(valid_lines):
                 s = line['start_ms']
