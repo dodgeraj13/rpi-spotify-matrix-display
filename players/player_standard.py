@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw
 
 W, H = 64, 64
+LYRICS_WIDTH = 60
 
 class PlayerStandard:
     @staticmethod
@@ -54,26 +55,26 @@ class PlayerStandard:
                 words = text.split()
                 out, cur = [], ""
                 for word in words:
-                    if font.getlength(f"{cur} {word}".strip()) <= 46:
+                    if font.getlength(f"{cur} {word}".strip()) <= LYRICS_WIDTH:
                         cur = f"{cur} {word}".strip()
                     else:
                         if cur: out.append(cur)
                         cur, rem = "", word
                         while rem:
-                            if font.getlength(rem) <= 46:
+                            if font.getlength(rem) <= LYRICS_WIDTH:
                                 cur = rem
                                 break
                             
                             found = False
                             for i in range(len(rem) - 1, 0, -1):
-                                if rem[i] == '-' and font.getlength(rem[:i+1]) <= 46:
+                                if rem[i] == '-' and font.getlength(rem[:i+1]) <= LYRICS_WIDTH:
                                     out.append(rem[:i+1])
                                     rem, found = rem[i+1:], True
                                     break
                             if found: continue
                             
                             for i in range(len(rem) - 1, 0, -1):
-                                if font.getlength(rem[:i] + "-") <= 46:
+                                if font.getlength(rem[:i] + "-") <= LYRICS_WIDTH:
                                     out.append(rem[:i] + "-")
                                     rem, found = rem[i:], True
                                     break
@@ -88,7 +89,7 @@ class PlayerStandard:
                 
                 for i, line in enumerate(out):
                     w = font.getlength(line)
-                    x = 8 + (48 - w) // 2
+                    x = 2 + (LYRICS_WIDTH - w) // 2
                     draw.text((x, y_start + i * 6), line, fill=(255, 255, 255), font=font)
 
         draw.rectangle((55, 0, 63, 12), fill=(0, 0, 0))
