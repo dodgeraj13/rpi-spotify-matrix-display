@@ -36,13 +36,18 @@ class PlayerStandard:
 
         components.album_art.draw(img, response.art_url)
 
-        if lyrics_mode == 'standard' and response.lyrics and response.lyrics.get('lyrics', {}).get('syncType') == 'LINE_SYNCED':
+        if lyrics_mode == 'standard' and response.is_playing and response.lyrics and response.lyrics.get('lyrics', {}).get('syncType') == 'LINE_SYNCED':
             text = None
             for line in response.lyrics['lyrics'].get('lines', []):
                 start_ms = int(line.get('startTimeMs', 0))
+                end_ms = int(line.get('endTimeMs', 0))
                 line_text = line.get('words', '').strip()
                 if start_ms <= progress_ms:
-                    if line_text and line_text != "♪":
+                    if not line_text or line_text == "♪":
+                        text = None
+                    elif end_ms > 0 and progress_ms > end_ms:
+                        text = None
+                    else:
                         text = line_text
                 elif line_text and line_text != "♪":
                     break
