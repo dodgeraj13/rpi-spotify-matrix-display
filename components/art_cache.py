@@ -24,26 +24,25 @@ def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
         if not is_gray:
             vibrancy = s * v
             is_brown = (0.04 <= h <= 0.15) and v < 0.6
+            is_blue_purple = 0.45 <= h <= 0.82
+            
+            if is_brown:
+                weight = 1.0
+            elif is_blue_purple:
+                weight = 1.5
+            else:
+                weight = 3.0
+                
             valid_buckets.append({
                 'color': b_color,
-                'count': b_count,
-                'vibrancy': vibrancy,
-                'brown': is_brown
+                'score': (b_count ** 0.1) * weight * vibrancy
             })
             
     if not valid_buckets:
         return (102, 240, 110)
         
-    valid_buckets.sort(key=lambda x: x['count'], reverse=True)
-    
-    best_bucket = valid_buckets[0]
-    
-    if best_bucket['brown'] and len(valid_buckets) > 1:
-        second_best = valid_buckets[1]
-        if second_best['vibrancy'] > best_bucket['vibrancy']:
-            best_bucket = second_best
-            
-    best_color = best_bucket['color']
+    valid_buckets.sort(key=lambda x: x['score'], reverse=True)
+    best_color = valid_buckets[0]['color']
         
     exact_pixels_in_bucket = [p for p in pixels if bucket(p) == best_color]
     if not exact_pixels_in_bucket:
