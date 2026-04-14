@@ -28,9 +28,11 @@ class PlayerStandard:
         components.play_indicator.x, components.play_indicator.y = 56, 3
         components.play_indicator.width, components.play_indicator.height = 4, 6
 
+        color = components.album_art.cache.get_color(response.art_url) if getattr(response, 'art_url', None) else (102, 240, 110)
+
         components.title_scroll.draw(draw)
         components.artist_scroll.draw(draw)
-        components.progress_bar.draw(draw, progress_ms, duration_ms)
+        components.progress_bar.draw(draw, progress_ms, duration_ms, fill_color=color)
         
         draw.rectangle((53, 0, 63, 12), fill=(0, 0, 0))
         draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
@@ -158,6 +160,6 @@ class PlayerStandard:
 
         draw.rectangle((55, 0, 63, 12), fill=(0, 0, 0))
         state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
-        components.play_indicator.draw(draw, state)
+        components.play_indicator.draw(draw, state, color=color)
 
         return img

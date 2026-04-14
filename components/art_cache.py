@@ -2,6 +2,65 @@ from io import BytesIO
 import threading
 import requests
 from PIL import Image
+import colorsys
+from collections import Counter
+
+def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
+    sample = img.resize((64, 64)).convert("RGB")
+    pixels = list(sample.getdata())
+    if not pixels: return (102, 240, 110)
+    
+    def bucket(p):
+        return (p[0] // 16 * 16, p[1] // 16 * 16, p[2] // 16 * 16)
+        
+    bucket_counts = Counter(bucket(p) for p in pixels)
+    
+    best_color = None
+    best_score = -1
+    
+    for b_color, b_count in bucket_counts.items():
+        r, g, b = b_color
+        h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
+        
+        is_gray = s < 0.2 or v < 0.2
+        is_brown = (0.04 <= h <= 0.15) and v < 0.6
+        vibrancy = s * v
+        
+        if is_gray or is_brown:
+            score = b_count * 0.01
+        else:
+            score = b_count * vibrancy
+            
+        if score > best_score:
+            best_score = score
+            best_color = b_color
+            
+    if best_color is None:
+        return (102, 240, 110)
+        
+    exact_pixels_in_bucket = [p for p in pixels if bucket(p) == best_color]
+    if not exact_pixels_in_bucket:
+        return (102, 240, 110)
+        
+    chosen_pixel = Counter(exact_pixels_in_bucket).most_common(1)[0][0]
+    
+    r, g, b = chosen_pixel
+    h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
+    
+    is_gray = s < 0.2 or v < 0.2
+    is_brown = (0.04 <= h <= 0.15) and v < 0.6
+    
+    if is_gray or is_brown:
+        return (102, 240, 110)
+        
+    if v < 0.6:
+        factor = 0.6 / max(v, 0.01)
+        r = min(255, int(r * factor))
+        g = min(255, int(g * factor))
+        b = min(255, int(b * factor))
+        chosen_pixel = (r, g, b)
+        
+    return chosen_pixel
 
 class ArtCache:
     def __init__(self):
@@ -16,6 +75,11 @@ class ArtCache:
             data[size] = data['orig'].resize((size, size), Image.LANCZOS)
         return data[size]
 
+    def get_color(self, url):
+        data = self._cache.get(url)
+        if not data or 'color' not in data: return (102, 240, 110)
+        return data['color']
+
     def fetch(self, url, safe_urls):
         if not url or url in self._cache or self._fetching_url == url: return
         self._fetching_url = url
@@ -29,7 +93,8 @@ class ArtCache:
                     sz = min(width, height)
                     l, t = (width - sz) // 2, (height - sz) // 2
                     img = img.crop((l, t, l + sz, t + sz))
-                self._cache[url] = {'orig': img}
+                color = get_dominant_color(img)
+                self._cache[url] = {'orig': img, 'color': color}
                 
                 for k in list(self._cache.keys()):
                     if k not in safe_urls and k != url and len(self._cache) > 4:

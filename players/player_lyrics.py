@@ -17,11 +17,12 @@ class PlayerLyrics:
         PlayerLyrics._transition_scrolling_text(components, art_t, t_total)
         PlayerLyrics._transition_album_art(components, art_t)
         PlayerLyrics._transition_play_indicator(components, t_total)
-        
+        color = components.album_art.cache.get_color(response.art_url) if getattr(response, 'art_url', None) else (102, 240, 110)
+
         components.title_scroll.draw(draw)
         components.artist_scroll.draw(draw)
         
-        PlayerLyrics._draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames, max_lyrics_frames)
+        PlayerLyrics._draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames, max_lyrics_frames, color)
 
         PlayerLyrics._draw_backgrounds(draw, components, art_t, t_total)
         
@@ -34,7 +35,7 @@ class PlayerLyrics:
             state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
         else:
             state = "Active"
-        components.play_indicator.draw(draw, state)
+        components.play_indicator.draw(draw, state, color=color)
 
         return img
 
@@ -77,7 +78,7 @@ class PlayerLyrics:
         draw.rectangle((W - 1, 0, W - 1, 16), fill=(0, 0, 0))
 
     @staticmethod
-    def _draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames, max_lyrics_frames):
+    def _draw_progress_bar(draw, components, progress_ms, duration_ms, art_t, t_total, lyrics_frames, max_lyrics_frames, color):
         text_x = components.title_scroll.x
         btn_x = int(56 + (W + 3 - 56) * (1.0 - t_total))
         text_width = btn_x - 3 - text_x - 1
@@ -102,11 +103,11 @@ class PlayerLyrics:
                 
             green_w = round(current_bar_width * progress_ms / duration_ms) if duration_ms > 0 else 0
             if green_w > 0:
-                draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=(102, 240, 110))
+                draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=color)
         elif t_total == 1.0:
             components.progress_bar.x, components.progress_bar.y = text_x, 14
             components.progress_bar.width, components.progress_bar.height = bar_width, 2
-            components.progress_bar.draw(draw, progress_ms, duration_ms)
+            components.progress_bar.draw(draw, progress_ms, duration_ms, fill_color=color)
 
     @staticmethod
     def _draw_lyrics_text(img, lyrics, progress_ms, y_offset, lyrics_frames, font, max_lyrics_frames, lyric_transition_time, can_show_lyrics):
