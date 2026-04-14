@@ -15,28 +15,35 @@ def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
         
     bucket_counts = Counter(bucket(p) for p in pixels)
     
-    best_color = None
-    best_score = -1
-    
+    valid_buckets = []
     for b_color, b_count in bucket_counts.items():
         r, g, b = b_color
         h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
         
         is_gray = s < 0.2 or v < 0.2
-        is_brown = (0.04 <= h <= 0.15) and v < 0.6
-        vibrancy = s * v
-        
-        if is_gray or is_brown:
-            score = b_count * 0.01
-        else:
-            score = b_count * vibrancy
+        if not is_gray:
+            vibrancy = s * v
+            is_brown = (0.04 <= h <= 0.15) and v < 0.6
+            valid_buckets.append({
+                'color': b_color,
+                'count': b_count,
+                'vibrancy': vibrancy,
+                'brown': is_brown
+            })
             
-        if score > best_score:
-            best_score = score
-            best_color = b_color
-            
-    if best_color is None:
+    if not valid_buckets:
         return (102, 240, 110)
+        
+    valid_buckets.sort(key=lambda x: x['count'], reverse=True)
+    
+    best_bucket = valid_buckets[0]
+    
+    if best_bucket['brown'] and len(valid_buckets) > 1:
+        second_best = valid_buckets[1]
+        if second_best['vibrancy'] > best_bucket['vibrancy']:
+            best_bucket = second_best
+            
+    best_color = best_bucket['color']
         
     exact_pixels_in_bucket = [p for p in pixels if bucket(p) == best_color]
     if not exact_pixels_in_bucket:
@@ -46,12 +53,6 @@ def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
     
     r, g, b = chosen_pixel
     h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
-    
-    is_gray = s < 0.2 or v < 0.2
-    is_brown = (0.04 <= h <= 0.15) and v < 0.6
-    
-    if is_gray or is_brown:
-        return (102, 240, 110)
         
     if v < 0.6:
         factor = 0.6 / max(v, 0.01)
