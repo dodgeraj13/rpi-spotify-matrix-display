@@ -61,15 +61,13 @@ class PlayerStandard:
                         'text': w
                     })
 
-            bg_alpha = 0.0
-            text_alpha = 0.0
-            text_to_draw = None
-
             ms_since_event = lyric_transition_time * 1000.0
             if lyrics_active:
                 global_fade_in = max(0.0, min(1.0, ms_since_event / float(FADE_MS)))
             else:
                 global_fade_in = max(0.0, min(1.0, 1.0 - (ms_since_event / float(FADE_MS))))
+
+            active_lines = []
 
             for i, line in enumerate(valid_lines):
                 s = line['start_ms']
@@ -82,10 +80,7 @@ class PlayerStandard:
                     if e <= s:
                         e = s + 5000
 
-                if progress_ms >= s - FADE_MS and progress_ms <= e:
-                    bg_in = min(1.0, (progress_ms - (s - FADE_MS)) / float(FADE_MS))
-                    bg_out = min(1.0, (e - progress_ms) / float(FADE_MS))
-                    bg_alpha += max(0.0, min(bg_in, bg_out))
+                l_text_alpha = 0.0
 
                 if progress_ms >= s and progress_ms <= e:
                     tf_in = min(1.0, (progress_ms - s) / float(FADE_MS))
@@ -98,21 +93,21 @@ class PlayerStandard:
                         elif next_s - progress_ms < FADE_MS:
                             tf_out = min(tf_out, (next_s - progress_ms) / float(FADE_MS))
                             
-                    t_alpha = max(0.0, min(tf_in, tf_out))
-                    if t_alpha > text_alpha:
-                        text_alpha = t_alpha
-                        text_to_draw = line['text']
+                    l_text_alpha = max(0.0, min(tf_in, tf_out))
 
-            bg_alpha = min(1.0, bg_alpha) * global_fade_in
-            text_alpha = text_alpha * global_fade_in
+                l_text_alpha = l_text_alpha * global_fade_in
+                l_bg_alpha = l_text_alpha
 
-            if bg_alpha > 0.01:
-                dimmer = Image.new("RGBA", (48, 48), (0, 0, 0, int(160 * bg_alpha)))
-                img.paste(dimmer, (8, 14), dimmer)
-            
-            if text_to_draw and text_alpha > 0.01:
+                if l_bg_alpha > 0.01 or l_text_alpha > 0.01:
+                    active_lines.append({
+                        'text': line['text'],
+                        'bg_alpha': l_bg_alpha,
+                        'text_alpha': l_text_alpha
+                    })
+
+            for line_data in active_lines:
                 font = components.title_scroll.font
-                words = text_to_draw.split()
+                words = line_data['text'].split()
                 out, cur = [], ""
                 for word in words:
                     if font.getlength(f"{cur} {word}".strip()) <= LYRICS_WIDTH:
@@ -145,18 +140,27 @@ class PlayerStandard:
                 if len(out) > 7: out = out[:7]
                 
                 total_height = len(out) * 6
-                y_start = 14 + (48 - total_height) // 2
+                y_start = 62 - total_height
                 
-                text_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                text_draw = ImageDraw.Draw(text_img)
-                c_alpha = int(255 * text_alpha)
-                
-                for i_line, text_line in enumerate(out):
-                    w = font.getlength(text_line)
-                    x = 2 + (LYRICS_WIDTH - w) // 2
-                    text_draw.text((x, y_start + i_line * 6), text_line, fill=(255, 255, 255, c_alpha), font=font)
+                if line_data['bg_alpha'] > 0.01:
+                    dim_y1 = max(14, y_start - 1)
+                    dim_y2 = min(62, y_start + total_height + 1)
+                    dim_h = dim_y2 - dim_y1
+                    if dim_h > 0:
+                        dimmer = Image.new("RGBA", (48, dim_h), (0, 0, 0, int(160 * line_data['bg_alpha'])))
+                        img.paste(dimmer, (8, dim_y1), dimmer)
+
+                if line_data['text_alpha'] > 0.01:
+                    text_img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                    text_draw = ImageDraw.Draw(text_img)
+                    c_alpha = int(255 * line_data['text_alpha'])
                     
-                img.paste(text_img, (0, 0), text_img)
+                    for i_line, text_line in enumerate(out):
+                        w = font.getlength(text_line)
+                        x = 2 + (LYRICS_WIDTH - w) // 2
+                        text_draw.text((x, y_start + i_line * 6), text_line, fill=(255, 255, 255, c_alpha), font=font)
+                        
+                    img.paste(text_img, (0, 0), text_img)
 
         draw.rectangle((55, 0, 63, 12), fill=(0, 0, 0))
         state = "Paused" if not response.is_playing else ("Play" if show_play else "Active")
