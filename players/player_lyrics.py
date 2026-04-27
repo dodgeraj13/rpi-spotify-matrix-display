@@ -87,7 +87,7 @@ class PlayerLyrics:
             bar_y = 62 + int(art_t * 4)
             if bar_y < 64:
                 SlideTransition.apply(components.progress_bar, 0, 62, 0, 66, art_t * 2)
-                components.progress_bar.draw(draw, progress_ms, duration_ms)
+                components.progress_bar.draw(draw, progress_ms, duration_ms, fill_color=color)
 
         bar_width = W - text_x - 1 if t_total > 0 else text_width
         
