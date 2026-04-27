@@ -55,8 +55,6 @@ class SpotifyModule:
         except Exception as e:
             print(f"Spotify setup failed: {e}")
 
-
-
     def get_current_playback(self) -> Optional[PlaybackInfo]:
         if not self.spotify or time.time() < self.rate_limit_until:
             return None
@@ -82,6 +80,7 @@ class SpotifyModule:
             self._handle_rate_limit(e)
             return None
         except Exception as e:
+            print(f"Spotify polling error: {e}")
             return None
 
     def _process_track(self, track) -> PlaybackInfo:
@@ -90,21 +89,19 @@ class SpotifyModule:
              return PlaybackInfo(None, None, None, track['is_playing'], track.get('progress_ms', 0), 0)
 
         artists = item['artists']
-        artist_text = artists[0]['name']
-        if len(artists) > 1:
-            artist_text += f", {artists[1]['name']}"
+        artist_text = ", ".join(a['name'] for a in artists if 'name' in a) if artists else None
             
         images = item['album']['images']
         art_url = images[0]['url'] if images else None
         
         return PlaybackInfo(
             artist=artist_text,
-            title=item['name'],
+            title=item['name'] or None,
             art_url=art_url,
             is_playing=track['is_playing'],
             progress_ms=track.get('progress_ms', 0),
             duration_ms=item.get('duration_ms', 0),
-            lyrics=self.lyrics_fetcher.get_lyrics(item['id']),
+            lyrics=self.lyrics_fetcher.get_lyrics(item['id']) if item['id'] else None,
             track_id=item['id']
         )
 
@@ -129,10 +126,9 @@ class SpotifyModule:
             return self._device_cache
 
     def _parse_whitelist(self, config):
-        if 'Spotify' not in config: return []
-        if 'device_whitelist' not in config['Spotify']: return []
-        wl = config['Spotify']['device_whitelist']
-        return [x.strip().strip("'") for x in wl.strip("[]").split(',')] if isinstance(wl, str) else wl
+        wl_str = config.get('Spotify', 'device_whitelist', fallback='')
+        if not wl_str: return []
+        return [x.strip().strip("'\"") for x in wl_str.strip("[]").split(',') if x.strip()]
 
     def _handle_rate_limit(self, e: SpotifyException):
         if e.http_status == 429:
