@@ -173,9 +173,12 @@ class SpotifyPlayer:
         if response.track_id and response.track_id != self.current_track_id:
             self.old_components = self.components
             self.components = self._create_components()
-            self.old_response = self.response if self.response and self.response.track_id == self.current_track_id else getattr(self, 'last_response', None)
-            if not self.old_response and hasattr(self, '_last_response_obj'):
-                self.old_response = self._last_response_obj
+            if self.current_track_id is None:
+                self.old_response = None
+            else:
+                self.old_response = self.response if self.response and self.response.track_id == self.current_track_id else getattr(self, 'last_response', None)
+                if not self.old_response and hasattr(self, '_last_response_obj'):
+                    self.old_response = self._last_response_obj
             self.old_progress_ms = self._last_prog_ms
             self.old_duration_ms = self.old_response.duration_ms if self.old_response else 0
             self.old_render_state = {
