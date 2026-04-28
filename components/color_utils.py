@@ -50,6 +50,9 @@ def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
     r, g, b = chosen_pixel
     h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
         
+    if s < 0.2 or v < 0.4:
+        return (102, 240, 110)
+        
     if v < 0.6:
         factor = 0.6 / max(v, 0.01)
         r = min(255, int(r * factor))
