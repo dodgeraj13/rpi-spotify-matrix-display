@@ -16,10 +16,11 @@ class PlayerTransition:
         self.finish_time = 0.0
         self.history = []
 
-    def start(self, new_track_id, current_track_id):
+    def start(self, new_track_id, current_track_id, force_slide=False):
         self.active = True
         self.frames = 0
         self.direction = 1
+        self.is_new_session = (current_track_id is None) or force_slide
         
         if new_track_id in self.history and current_track_id in self.history:
             if self.history.index(new_track_id) < self.history.index(current_track_id):
@@ -50,6 +51,12 @@ class PlayerTransition:
         
         # 2. Slide new track linearly
         comp.paste(target_frame, (t_base + d * o_l, 0))
+
+        # 3. Handle progress bar
+        if not getattr(self, 'is_new_session', False):
+            # Keep progress bar static and snap to new track immediately
+            pb_new = target_frame.crop((0, 62, W, H))
+            comp.paste(pb_new, (0, 62))
 
         self.frames += dt * self.target_fps
         if self.frames >= self.total_frames:

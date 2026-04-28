@@ -101,7 +101,7 @@ class PlayerLyrics:
             if current_bar_width > 0:
                 draw.rectangle((text_x, 14, text_x + current_bar_width - 1, 15), fill=(100, 100, 100))
                 
-            green_w = round(current_bar_width * progress_ms / duration_ms) if duration_ms > 0 else 0
+            green_w = max(1, round(current_bar_width * progress_ms / duration_ms)) if duration_ms > 0 else 0
             if green_w > 0:
                 draw.rectangle((text_x, 14, text_x + green_w - 1, 15), fill=color)
         elif t_total == 1.0:

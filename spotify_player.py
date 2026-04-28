@@ -189,7 +189,8 @@ class SpotifyPlayer:
                 'last_playing_time': getattr(self, 'last_playing_time', 0.0)
             }
             
-            self.player_transition.start(response.track_id, self.current_track_id)
+            force_slide = getattr(self, 'was_fullscreen', False) or getattr(self, 'was_showing_lyrics', False)
+            self.player_transition.start(response.track_id, self.current_track_id, force_slide)
             self.current_track_id = response.track_id
             self.player_transition.update_history(response.track_id)
             self.was_showing_lyrics = False
