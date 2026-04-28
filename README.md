@@ -1,6 +1,14 @@
-# Raspberry Pi Spotify Matrix Display
+# 64x64 Spotify Matrix Display
 
-A Spotify display for 64x64 RGB LED matrices.
+A Spotify display for 64x64 RGB LED matrices. Raspberry Pi compatible.
+
+| Standard | Fullscreen |
+| --- | --- |
+| ![Standard](images/standard_screenshot.png) | ![Fullscreen](images/fullscreen_screenshot.png) |
+
+| Standard Lyrics | Dedicated Lyrics |
+| --- | --- |
+| ![Lyrics](images/lyrics_screenshot.png) | <img src="/images/lyrics.gif" width="256"> |
 
 - **🎵 Spotify API Integration** – Show off your currently playing track
 - **🖼️ Vibrant Display** – Display album artwork alongside track details or fullscreen
