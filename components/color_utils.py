@@ -19,20 +19,9 @@ def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
         
         is_gray = s < 0.2 or v < 0.2
         if not is_gray:
-            vibrancy = s * v
-            is_brown = (0.04 <= h <= 0.15) and v < 0.6
-            is_blue_purple = 0.45 <= h <= 0.82
-            
-            if is_brown:
-                weight = 1.0
-            elif is_blue_purple:
-                weight = 1.5
-            else:
-                weight = 3.0
-                
             valid_buckets.append({
                 'color': b_color,
-                'score': (b_count ** 0.1) * weight * vibrancy
+                'score': (b_count ** 0.25) * (s ** 2) * (v ** 3)
             })
             
     if not valid_buckets:
@@ -45,14 +34,18 @@ def get_dominant_color(img: Image.Image) -> tuple[int, int, int]:
     if not exact_pixels_in_bucket:
         return (102, 240, 110)
         
-    chosen_pixel = Counter(exact_pixels_in_bucket).most_common(1)[0][0]
+    def px_vibrancy(px):
+        _, px_s, px_v = colorsys.rgb_to_hsv(px[0]/255.0, px[1]/255.0, px[2]/255.0)
+        return px_s * px_v
+        
+    chosen_pixel = max(exact_pixels_in_bucket, key=px_vibrancy)
     
     r, g, b = chosen_pixel
     h, s, v = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
         
-    if s < 0.2 or v < 0.4:
+    if s < 0.2:
         return (102, 240, 110)
-        
+
     if v < 0.6:
         factor = 0.6 / max(v, 0.01)
         r = min(255, int(r * factor))
