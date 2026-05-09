@@ -57,6 +57,31 @@ After running, follow instructions provided in the console. Pasted link should b
 
 You can configure Matrix and Spotify settings in `config.ini`. For example, you can change your [hardware mapping](https://github.com/hzeller/rpi-rgb-led-matrix#changing-parameters-via-command-line-flags) (may be required), opt for fullscreen artwork, or set up a device whitelist.
 
+
+## FAQ
+
+#### Can I use this with a matrix other than 64x64?
+
+Only 64x64 matrices are supported at this time. If you'd like to extend this project to support other matrix sizes, feel free to fork this project!
+
+#### I'm not seeing the right album artwork.
+
+Spotify is likely on video playback and is sending a still from the video. Switch back to audio playback.
+
+#### Where do I get my `sp_dc` for lyrics?
+
+[See this guide](https://github.com/akashrchandran/syrics/wiki/Finding-sp_dc) to find your sp_dc cookie. Skip this step if you do not want lyrics.
+
+#### Why are lyrics sometimes delayed or out of sync?
+
+When playing to a Spotify Connect destination, lyrics may start out delayed due to the API not accounting for how long the destination took to connect. This is automatically resolved after about 30s of listening, when the API figures out what happened. You can see the same behavior with Spotify's own lyrics screen as well. Additionally, some songs are synced better than others.
+
+#### Why does the API get called every second?
+
+Spotify's API does not provide public websocket support, so the only way to determine playback status and track progression is by polling the API regularly. You can increase this polling interval in `config.ini` if you want to reduce the number of calls.
+
+Note that using the `device_whitelist` requires an additional request every 5 seconds to check for active devices. This is disabled by default.
+
 ---
 
 ### Building Your Own Display
