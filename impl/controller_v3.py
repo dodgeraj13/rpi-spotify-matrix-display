@@ -50,6 +50,7 @@ def main():
     options.brightness = 100 if is_emulated else config.getint('Matrix', 'brightness', fallback=100)
     options.gpio_slowdown = config.getint('Matrix', 'gpio_slowdown', fallback=1)
     options.limit_refresh_rate_hz = config.getint('Matrix', 'limit_refresh_rate_hz', fallback=0)
+    options.pixel_mapper_config = config.get('Matrix', 'pixel_mapper_config', fallback='')
     options.drop_privileges = False
     matrix = RGBMatrix(options = options)
 
