@@ -47,10 +47,16 @@ _backend_base = _config.get("Spotify", "backend_url", fallback="").rstrip("/")
 _device_token = _config.get("Spotify", "device_token", fallback="")
 _is_emulated  = "-e" in sys.argv or "--emulated" in sys.argv
 
-# Add rgbmatrix Python bindings to path so we can import the class for wrapping
+# Add rgbmatrix Python bindings to path only if the system-level install isn't
+# already available.  Inserting an uncompiled local copy ahead of the system
+# package causes "No module named 'rgbmatrix.core'" at runtime.
 _rgb_bindings = _repo_root / "rpi-rgb-led-matrix" / "bindings" / "python"
-if _rgb_bindings.exists():
-    sys.path.insert(0, str(_rgb_bindings))
+try:
+    import rgbmatrix as _rgbmatrix_probe  # noqa: F401 — probe only
+    del _rgbmatrix_probe
+except ImportError:
+    if _rgb_bindings.exists():
+        sys.path.insert(0, str(_rgb_bindings))
 
 
 # ── Notification overlay ──────────────────────────────────────────────────────
